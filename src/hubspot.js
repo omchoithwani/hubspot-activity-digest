@@ -280,7 +280,6 @@ async function fetchCallsLogged(yesterdayTs) {
           },
         ],
         properties: ['hs_call_title', 'hs_call_direction', 'hs_call_duration', 'hs_call_disposition', 'hubspot_owner_id', 'hs_call_body'],
-        sorts: ['-createdate'],
       }
     );
   } catch (err) {
@@ -305,8 +304,7 @@ async function fetchEmailsSent(yesterdayTs) {
             ],
           },
         ],
-        properties: ['hs_email_subject', 'hs_email_direction', 'hs_email_status', 'hubspot_owner_id', 'hs_email_text'],
-        sorts: ['-createdate'],
+        properties: ['hs_email_subject', 'hs_email_direction', 'hs_email_status', 'hubspot_owner_id', 'hs_email_html'],
       }
     );
   } catch (err) {
@@ -331,8 +329,7 @@ async function fetchMeetingsBooked(yesterdayTs) {
             ],
           },
         ],
-        properties: ['hs_meeting_title', 'hs_meeting_start_time', 'hs_meeting_end_time', 'hs_meeting_outcome', 'hubspot_owner_id', 'hs_internal_meeting_notes'],
-        sorts: ['-createdate'],
+        properties: ['hs_meeting_title', 'hs_meeting_start_time', 'hs_meeting_end_time', 'hs_meeting_outcome', 'hubspot_owner_id', 'hs_meeting_body'],
       }
     );
   } catch (err) {
@@ -358,7 +355,6 @@ async function fetchNotesAdded(yesterdayTs) {
           },
         ],
         properties: ['hs_note_body', 'hubspot_owner_id', 'hs_timestamp'],
-        sorts: ['-createdate'],
       }
     );
   } catch (err) {
