@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/server.js",
     "digest": "node src/digest.js",
-    "test:digest": "node src/digest.js --test"
+    "test:digest": "node src/digest.js --test",
+    "preview": "node src/preview.js"
   },
   "engines": {
     "node": ">=18.0.0"
