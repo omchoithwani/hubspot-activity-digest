@@ -275,11 +275,12 @@ async function fetchCallsLogged(yesterdayTs) {
         filterGroups: [
           {
             filters: [
-              { propertyName: 'createdate', operator: 'GTE', value: String(yesterdayTs) },
+              { propertyName: 'hs_createdate', operator: 'GTE', value: String(yesterdayTs) },
             ],
           },
         ],
         properties: ['hs_call_title', 'hs_call_direction', 'hs_call_duration', 'hs_call_disposition', 'hubspot_owner_id', 'hs_call_body'],
+        sorts: ['-hs_createdate'],
       }
     );
   } catch (err) {
@@ -300,11 +301,12 @@ async function fetchEmailsSent(yesterdayTs) {
         filterGroups: [
           {
             filters: [
-              { propertyName: 'createdate', operator: 'GTE', value: String(yesterdayTs) },
+              { propertyName: 'hs_createdate', operator: 'GTE', value: String(yesterdayTs) },
             ],
           },
         ],
-        properties: ['hs_email_subject', 'hs_email_direction', 'hs_email_status', 'hubspot_owner_id', 'hs_email_html'],
+        properties: ['hs_email_subject', 'hs_email_direction', 'hs_email_status', 'hubspot_owner_id'],
+        sorts: ['-hs_createdate'],
       }
     );
   } catch (err) {
@@ -325,11 +327,12 @@ async function fetchMeetingsBooked(yesterdayTs) {
         filterGroups: [
           {
             filters: [
-              { propertyName: 'createdate', operator: 'GTE', value: String(yesterdayTs) },
+              { propertyName: 'hs_createdate', operator: 'GTE', value: String(yesterdayTs) },
             ],
           },
         ],
         properties: ['hs_meeting_title', 'hs_meeting_start_time', 'hs_meeting_end_time', 'hs_meeting_outcome', 'hubspot_owner_id', 'hs_meeting_body'],
+        sorts: ['-hs_createdate'],
       }
     );
   } catch (err) {
@@ -350,11 +353,12 @@ async function fetchNotesAdded(yesterdayTs) {
         filterGroups: [
           {
             filters: [
-              { propertyName: 'createdate', operator: 'GTE', value: String(yesterdayTs) },
+              { propertyName: 'hs_createdate', operator: 'GTE', value: String(yesterdayTs) },
             ],
           },
         ],
         properties: ['hs_note_body', 'hubspot_owner_id', 'hs_timestamp'],
+        sorts: ['-hs_createdate'],
       }
     );
   } catch (err) {
