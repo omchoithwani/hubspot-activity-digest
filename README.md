@@ -64,6 +64,7 @@ cp .env.example .env
    - `crm.objects.emails.read`
    - `crm.objects.meetings.read`
    - `crm.objects.notes.read`
+   - `forms` (for listing forms and reading form submissions)
    - `transactional-email` (for sending via HubSpot Email API)
 5. Click **Create app** and copy the **Access Token**
 
