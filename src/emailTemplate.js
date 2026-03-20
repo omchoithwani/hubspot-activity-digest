@@ -141,6 +141,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
     notesAdded = [],
     contactsCreated = [],
     companiesCreated = [],
+    formsSubmitted = [],
   } = data;
 
   function ownerName(id) {
@@ -153,6 +154,8 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
     return stageMap[id]?.label || id;
   }
 
+  const totalFormSubmissions = formsSubmitted.reduce((s, f) => s + f.count, 0);
+
   const totalActivities =
     dealsCreated.length +
     dealStageChanges.length +
@@ -162,7 +165,8 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
     meetingsBooked.length +
     notesAdded.length +
     contactsCreated.length +
-    companiesCreated.length;
+    companiesCreated.length +
+    totalFormSubmissions;
 
   const noActivity = totalActivities === 0;
 
@@ -176,10 +180,13 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
     { icon: '📅', label: 'Meetings', count: meetingsBooked.length },
     { icon: '📝', label: 'Notes Added', count: notesAdded.length },
     { icon: '👤', label: 'New Contacts', count: contactsCreated.length },
+    { icon: '📋', label: 'Form Submits', count: totalFormSubmissions },
+    { icon: '🏢', label: 'New Companies', count: companiesCreated.length },
   ];
 
   const summaryRow1 = summaryItems.slice(0, 4);
   const summaryRow2 = summaryItems.slice(4, 8);
+  const summaryRow3 = summaryItems.slice(8, 10);
 
   // Deals created table
   const dealsCreatedRows = dealsCreated.map((d) => {
@@ -260,6 +267,25 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
     ownerName(c.properties?.hubspot_owner_id),
   ]);
 
+  // Form submissions — flat table: one row per submission across all forms
+  const formSubmissionRows = formsSubmitted.flatMap((form) =>
+    form.submissions.map((sub) => {
+      const vals = Object.fromEntries((sub.values || []).map((v) => [v.name, v.value]));
+      const email = vals.email || vals.EMAIL || '—';
+      const firstName = vals.firstname || vals.FIRSTNAME || vals.first_name || '';
+      const lastName = vals.lastname || vals.LASTNAME || vals.last_name || '';
+      const name = [firstName, lastName].filter(Boolean).join(' ') || '—';
+      const pageUrl = sub.pageUrl ? truncate(sub.pageUrl, 50) : '—';
+      return [
+        `<strong style="color:${WHITE};">${form.formName}</strong>`,
+        formatDate(new Date(sub.submittedAt).toISOString()),
+        email,
+        name,
+        pageUrl,
+      ];
+    })
+  );
+
   const errorsSection = errors && errors.length > 0 ? `
     <tr>
       <td style="padding:16px;background:#2A1A1A;border-radius:8px;margin-top:20px;border-left:4px solid ${DANGER};">
@@ -327,6 +353,9 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
                       </tr>
                       <tr>
                         ${summaryRow2.map((s) => summaryCard(s.icon, s.label, s.count)).join('')}
+                      </tr>
+                      <tr>
+                        ${summaryRow3.map((s) => summaryCard(s.icon, s.label, s.count)).join('')}
                       </tr>
                     </table>
                   </td>
@@ -405,6 +434,14 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
                 ${activityTable(
                   ['Company Name', 'Domain', 'Industry', 'Owner'],
                   companyRows
+                )}` : ''}
+
+                <!-- Form Submissions -->
+                ${totalFormSubmissions > 0 ? `
+                ${sectionHeader('📋', 'Form Submissions', totalFormSubmissions)}
+                ${activityTable(
+                  ['Form', 'Submitted At', 'Email', 'Name', 'Page'],
+                  formSubmissionRows
                 )}` : ''}
 
                 `}

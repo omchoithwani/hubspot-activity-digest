@@ -473,6 +473,70 @@ async function fetchCompaniesCreated({ startMs, endMs }) {
 }
 
 /**
+ * Fetch submissions for a single form, filtered to the given time window.
+ * Returns newest-first from the API so we stop early once we pass startMs.
+ */
+async function fetchSubmissionsForForm(formId, startMs, endMs) {
+  const c = getClient();
+  const submissions = [];
+  let after = undefined;
+
+  do {
+    const qs = { limit: 50 };
+    if (after) qs.after = String(after);
+
+    const resp = await withRetry(() =>
+      c.apiRequest({ method: 'GET', path: `/form-integrations/v1/submissions/forms/${formId}`, qs })
+    );
+
+    const page = resp.results || [];
+    let hitOldData = false;
+
+    for (const sub of page) {
+      const ts = sub.submittedAt; // milliseconds
+      if (ts < startMs) { hitOldData = true; break; }
+      if (ts < endMs) submissions.push(sub);
+    }
+
+    if (hitOldData) break;
+    after = resp.paging?.next?.after;
+  } while (after);
+
+  return submissions;
+}
+
+/**
+ * Fetch all form submissions from yesterday, grouped by form.
+ * Returns an array of { formId, formName, count, submissions[] }.
+ */
+async function fetchFormsSubmitted({ startMs, endMs }) {
+  try {
+    const c = getClient();
+
+    // List all forms in the portal
+    const formsResp = await withRetry(() =>
+      c.apiRequest({ method: 'GET', path: '/marketing/v3/forms', qs: { limit: 200 } })
+    );
+    const forms = formsResp.results || [];
+
+    const results = [];
+    for (const form of forms) {
+      const submissions = await fetchSubmissionsForForm(form.id, startMs, endMs);
+      if (submissions.length > 0) {
+        results.push({ formId: form.id, formName: form.name || form.id, count: submissions.length, submissions });
+      }
+      // Small pause between forms to stay well within rate limits
+      await sleep(150);
+    }
+
+    return results;
+  } catch (err) {
+    console.error('Failed to fetch form submissions:', err.message);
+    throw err;
+  }
+}
+
+/**
  * Send email via HubSpot Single Send API (transactional)
  */
 async function sendEmail({ toEmails, subject, htmlBody }) {
@@ -527,4 +591,5 @@ module.exports = {
   sendEmail,
   fetchAccountInfo,
   getYesterdayRange,
+  fetchFormsSubmitted,
 };

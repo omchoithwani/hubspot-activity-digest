@@ -19,6 +19,7 @@ const {
   fetchCompaniesCreated,
   fetchAccountInfo,
   getYesterdayRange,
+  fetchFormsSubmitted,
 } = require('./hubspot');
 
 const { generateEmailHtml, generateSubject } = require('./emailTemplate');
@@ -99,6 +100,8 @@ async function main() {
     safelyFetch('Companies Created', () => fetchCompaniesCreated(range), errors),
   ]);
 
+  const formsSubmitted = await safelyFetch('Form Submissions', () => fetchFormsSubmitted(range), errors);
+
   const data = {
     dealsCreated,
     dealStageChanges,
@@ -109,9 +112,15 @@ async function main() {
     notesAdded,
     contactsCreated,
     companiesCreated,
+    formsSubmitted,
   };
 
-  const totalActivities = Object.values(data).reduce((sum, arr) => sum + arr.length, 0);
+  const totalFormSubmissions = formsSubmitted.reduce((s, f) => s + f.count, 0);
+  const totalActivities =
+    dealsCreated.length + dealStageChanges.length + tasksCompleted.length +
+    callsLogged.length + emailsSent.length + meetingsBooked.length +
+    notesAdded.length + contactsCreated.length + companiesCreated.length +
+    totalFormSubmissions;
   console.log(`\nTotal activities: ${totalActivities}`);
 
   const htmlBody = generateEmailHtml({
