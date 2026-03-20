@@ -66,23 +66,23 @@ async function main() {
   ]);
 
   console.log('\nFetching activities...');
-  const [
-    dealsCreated,
-    dealStageChanges,
-    tasksCompleted,
-    callsLogged,
-    emailsSent,
-    meetingsBooked,
-    notesAdded,
-    contactsCreated,
-    companiesCreated,
-  ] = await Promise.all([
+  const [dealsCreated, dealStageChanges, tasksCompleted] = await Promise.all([
     safelyFetch('Deals Created', () => fetchDealsCreated(yesterdayTs), errors),
     safelyFetch('Deal Stage Changes', () => fetchDealStageChanges(yesterdayTs), errors),
     safelyFetch('Tasks Completed', () => fetchTasksCompleted(yesterdayTs), errors),
+  ]);
+
+  await new Promise((r) => setTimeout(r, 500));
+
+  const [callsLogged, emailsSent, meetingsBooked] = await Promise.all([
     safelyFetch('Calls Logged', () => fetchCallsLogged(yesterdayTs), errors),
     safelyFetch('Emails Sent', () => fetchEmailsSent(yesterdayTs), errors),
     safelyFetch('Meetings Booked', () => fetchMeetingsBooked(yesterdayTs), errors),
+  ]);
+
+  await new Promise((r) => setTimeout(r, 500));
+
+  const [notesAdded, contactsCreated, companiesCreated] = await Promise.all([
     safelyFetch('Notes Added', () => fetchNotesAdded(yesterdayTs), errors),
     safelyFetch('Contacts Created', () => fetchContactsCreated(yesterdayTs), errors),
     safelyFetch('Companies Created', () => fetchCompaniesCreated(yesterdayTs), errors),
