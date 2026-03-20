@@ -1,0 +1,28 @@
+{
+  "name": "hubspot-activity-digest",
+  "version": "1.0.0",
+  "description": "Daily HubSpot activity digest sent via email, deployed on Render.com",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "digest": "node src/digest.js",
+    "test:digest": "node src/digest.js --test"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@hubspot/api-client": "^11.0.0",
+    "express": "^4.18.2",
+    "dotenv": "^16.3.1"
+  },
+  "keywords": [
+    "hubspot",
+    "digest",
+    "crm",
+    "email",
+    "render"
+  ],
+  "author": "AeroRev",
+  "license": "MIT"
+}

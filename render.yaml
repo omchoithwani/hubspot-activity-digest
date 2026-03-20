@@ -1,0 +1,59 @@
+services:
+  # Web service - keeps the app alive and provides health check endpoint
+  - type: web
+    name: hubspot-digest
+    runtime: node
+    region: oregon
+    plan: free
+    buildCommand: npm install
+    startCommand: node src/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HUBSPOT_ACCESS_TOKEN
+        sync: false   # Set this in the Render dashboard
+      - key: RECIPIENT_EMAILS
+        sync: false   # Comma-separated email addresses
+      - key: FROM_EMAIL
+        sync: false   # Optional: sender email address
+      - key: FROM_NAME
+        sync: false   # Optional: sender display name
+      - key: TRIGGER_TOKEN
+        sync: false   # Optional: token to protect /trigger endpoint
+      - key: TEST_RECIPIENT_EMAIL
+        sync: false   # Optional: override recipient for test sends
+
+  # Cron job - runs the digest daily at 5:00 PM EST (22:00 UTC)
+  # Note: During EDT (March-November), 5 PM EDT = 21:00 UTC
+  # Adjust schedule to "0 21 * * *" during EDT if needed,
+  # or set to 22:00 UTC (10 PM UTC = 5 PM EST) which works all year in EST.
+  - type: cron
+    name: hubspot-digest-cron
+    runtime: node
+    region: oregon
+    plan: free
+    schedule: "0 22 * * *"   # 5:00 PM EST / 10:00 PM UTC
+    buildCommand: npm install
+    startCommand: node src/digest.js
+    envVars:
+      - fromService:
+          type: web
+          name: hubspot-digest
+          envVarKey: HUBSPOT_ACCESS_TOKEN
+      - fromService:
+          type: web
+          name: hubspot-digest
+          envVarKey: RECIPIENT_EMAILS
+      - fromService:
+          type: web
+          name: hubspot-digest
+          envVarKey: FROM_EMAIL
+      - fromService:
+          type: web
+          name: hubspot-digest
+          envVarKey: FROM_NAME
+      - fromService:
+          type: web
+          name: hubspot-digest
+          envVarKey: NODE_ENV
