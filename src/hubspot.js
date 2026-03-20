@@ -480,6 +480,7 @@ async function fetchSubmissionsForForm(formId, startMs, endMs) {
   const c = getClient();
   const submissions = [];
   let after = undefined;
+  let firstPage = true;
 
   do {
     const qs = { limit: 50 };
@@ -490,12 +491,28 @@ async function fetchSubmissionsForForm(formId, startMs, endMs) {
     );
 
     const page = resp.results || [];
+
+    // On the first page, log the raw structure of the first submission so we
+    // can verify the field names / timestamp format coming back from the API.
+    if (firstPage && page.length > 0) {
+      console.log(`[forms] first submission sample for form ${formId}:`, JSON.stringify(page[0]).slice(0, 300));
+      firstPage = false;
+    }
+
     let hitOldData = false;
 
     for (const sub of page) {
-      const ts = sub.submittedAt; // milliseconds
+      // submittedAt is documented as milliseconds, but guard against seconds
+      let ts = sub.submittedAt;
+      if (ts == null) {
+        console.warn(`[forms] submission missing submittedAt — raw keys: ${Object.keys(sub).join(', ')}`);
+        continue;
+      }
+      // If the value looks like seconds (< year 2000 in ms), convert it
+      if (ts < 946684800000) ts = ts * 1000;
+
       if (ts < startMs) { hitOldData = true; break; }
-      if (ts < endMs) submissions.push(sub);
+      if (ts >= startMs && ts < endMs) submissions.push({ ...sub, submittedAt: ts });
     }
 
     if (hitOldData) break;
