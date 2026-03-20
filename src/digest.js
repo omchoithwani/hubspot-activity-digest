@@ -15,7 +15,8 @@ const {
   fetchContactsCreated,
   fetchCompaniesCreated,
   sendEmail,
-  getYesterdayTimestamp,
+  fetchAccountInfo,
+  getYesterdayRange,
 } = require('./hubspot');
 
 const { generateEmailHtml, generateSubject } = require('./emailTemplate');
@@ -28,11 +29,11 @@ const state = {
 };
 
 /**
- * Format a Date object as a readable string in EST/EDT
+ * Format a Date object as a readable string in the given IANA timezone.
  */
-function formatDateEST(date) {
+function formatDate(date, timezone) {
   return date.toLocaleString('en-US', {
-    timeZone: 'America/New_York',
+    timeZone: timezone,
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -71,9 +72,19 @@ async function generateDigest(options = {}) {
   console.log('='.repeat(60));
 
   const now = new Date();
-  const yesterdayTs = getYesterdayTimestamp();
 
-  const dateRange = `${formatDateEST(new Date(yesterdayTs))} → ${formatDateEST(now)}`;
+  // Fetch account timezone before anything else
+  let accountTimezone = 'America/New_York';
+  try {
+    const info = await fetchAccountInfo();
+    accountTimezone = info.timeZone;
+    console.log(`Account timezone: ${accountTimezone}`);
+  } catch (err) {
+    console.warn(`Could not fetch account timezone, defaulting to ${accountTimezone}:`, err.message);
+  }
+
+  const range = getYesterdayRange(accountTimezone);
+  const dateRange = `${formatDate(new Date(range.startMs), accountTimezone)} → ${formatDate(new Date(range.endMs), accountTimezone)}`;
   console.log(`\nFetching activities for: ${dateRange}`);
 
   const errors = [];
@@ -98,15 +109,15 @@ async function generateDigest(options = {}) {
     contactsCreated,
     companiesCreated,
   ] = await Promise.all([
-    safelyFetch('Deals Created', () => fetchDealsCreated(yesterdayTs), errors),
-    safelyFetch('Deal Stage Changes', () => fetchDealStageChanges(yesterdayTs), errors),
-    safelyFetch('Tasks Completed', () => fetchTasksCompleted(yesterdayTs), errors),
-    safelyFetch('Calls Logged', () => fetchCallsLogged(yesterdayTs), errors),
-    safelyFetch('Emails Sent', () => fetchEmailsSent(yesterdayTs), errors),
-    safelyFetch('Meetings Booked', () => fetchMeetingsBooked(yesterdayTs), errors),
-    safelyFetch('Notes Added', () => fetchNotesAdded(yesterdayTs), errors),
-    safelyFetch('Contacts Created', () => fetchContactsCreated(yesterdayTs), errors),
-    safelyFetch('Companies Created', () => fetchCompaniesCreated(yesterdayTs), errors),
+    safelyFetch('Deals Created', () => fetchDealsCreated(range), errors),
+    safelyFetch('Deal Stage Changes', () => fetchDealStageChanges(range), errors),
+    safelyFetch('Tasks Completed', () => fetchTasksCompleted(range), errors),
+    safelyFetch('Calls Logged', () => fetchCallsLogged(range), errors),
+    safelyFetch('Emails Sent', () => fetchEmailsSent(range), errors),
+    safelyFetch('Meetings Booked', () => fetchMeetingsBooked(range), errors),
+    safelyFetch('Notes Added', () => fetchNotesAdded(range), errors),
+    safelyFetch('Contacts Created', () => fetchContactsCreated(range), errors),
+    safelyFetch('Companies Created', () => fetchCompaniesCreated(range), errors),
   ]);
 
   const data = {
@@ -138,7 +149,7 @@ async function generateDigest(options = {}) {
     errors,
   });
 
-  const subject = generateSubject(formatDateEST(now).split(',')[0], totalActivities);
+  const subject = generateSubject(formatDate(now, accountTimezone).split(',')[0], totalActivities);
 
   // Determine recipients
   let recipients;

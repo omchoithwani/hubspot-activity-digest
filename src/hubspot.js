@@ -44,10 +44,54 @@ async function withRetry(fn, retries = 4) {
 }
 
 /**
- * Get timestamp for 24 hours ago (in milliseconds)
+ * Fetch HubSpot account info (timezone, portalId, etc.)
  */
-function getYesterdayTimestamp() {
-  return Date.now() - 24 * 60 * 60 * 1000;
+async function fetchAccountInfo() {
+  const c = getClient();
+  const data = await withRetry(() =>
+    c.apiRequest({ method: 'GET', path: '/account-info/v3/details' })
+  );
+  return {
+    timeZone: data.timeZone || 'America/New_York',
+    portalId: data.portalId,
+  };
+}
+
+/**
+ * Get the UTC ms for midnight on a given date string (YYYY-MM-DD) in a timezone.
+ * Uses the "noon trick": at noon UTC we're far from DST transitions, so the
+ * offset is stable and we can back-calculate midnight accurately.
+ */
+function midnightUtcMs(dateStr, timezone) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const noonUtc = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(noonUtc);
+  const h = parseInt(parts.find((p) => p.type === 'hour').value, 10);
+  const min = parseInt(parts.find((p) => p.type === 'minute').value, 10);
+  const sec = parseInt(parts.find((p) => p.type === 'second').value, 10);
+  // At noon UTC local time is h:min:sec → subtract to reach local midnight
+  return noonUtc.getTime() - (h * 3600 + min * 60 + sec) * 1000;
+}
+
+/**
+ * Return { startMs, endMs } for yesterday midnight→today midnight in the given IANA timezone.
+ */
+function getYesterdayRange(ianaTimezone) {
+  const now = new Date();
+  const todayStr = now.toLocaleDateString('en-CA', { timeZone: ianaTimezone }); // YYYY-MM-DD
+  const [y, m, d] = todayStr.split('-').map(Number);
+  const yesterdayStr = new Date(Date.UTC(y, m - 1, d - 1))
+    .toLocaleDateString('en-CA', { timeZone: ianaTimezone });
+  return {
+    startMs: midnightUtcMs(yesterdayStr, ianaTimezone),
+    endMs: midnightUtcMs(todayStr, ianaTimezone),
+  };
 }
 
 /**
@@ -115,7 +159,7 @@ async function fetchDealStages() {
 /**
  * Fetch deals created in the last 24 hours
  */
-async function fetchDealsCreated(yesterdayTs) {
+async function fetchDealsCreated({ startMs, endMs }) {
   try {
     const c = getClient();
     return await searchAll(
@@ -124,7 +168,8 @@ async function fetchDealsCreated(yesterdayTs) {
         filterGroups: [
           {
             filters: [
-              { propertyName: 'createdate', operator: 'GTE', value: String(yesterdayTs) },
+              { propertyName: 'createdate', operator: 'GTE', value: String(startMs) },
+              { propertyName: 'createdate', operator: 'LTE', value: String(endMs) },
             ],
           },
         ],
@@ -142,18 +187,19 @@ async function fetchDealsCreated(yesterdayTs) {
  * Fetch deals with stage changes in the last 24 hours
  * Uses the property history API to detect FROM → TO stage transitions
  */
-async function fetchDealStageChanges(yesterdayTs) {
+async function fetchDealStageChanges({ startMs, endMs }) {
   try {
     const c = getClient();
 
-    // Fetch deals modified in last 24h
+    // Fetch deals modified in the yesterday window
     const modifiedDeals = await searchAll(
       (params) => c.crm.deals.searchApi.doSearch(params),
       {
         filterGroups: [
           {
             filters: [
-              { propertyName: 'hs_lastmodifieddate', operator: 'GTE', value: String(yesterdayTs) },
+              { propertyName: 'hs_lastmodifieddate', operator: 'GTE', value: String(startMs) },
+              { propertyName: 'hs_lastmodifieddate', operator: 'LTE', value: String(endMs) },
             ],
           },
         ],
@@ -186,7 +232,7 @@ async function fetchDealStageChanges(yesterdayTs) {
           const stageHistory = history?.propertiesWithHistory?.dealstage || [];
           const recentChanges = stageHistory.filter((entry) => {
             const ts = new Date(entry.timestamp).getTime();
-            return ts >= yesterdayTs;
+            return ts >= startMs && ts < endMs;
           });
 
           if (recentChanges.length >= 2) {
@@ -239,7 +285,7 @@ async function fetchDealStageChanges(yesterdayTs) {
 /**
  * Fetch tasks completed in the last 24 hours
  */
-async function fetchTasksCompleted(yesterdayTs) {
+async function fetchTasksCompleted({ startMs, endMs }) {
   try {
     const c = getClient();
     return await searchAll(
@@ -249,7 +295,8 @@ async function fetchTasksCompleted(yesterdayTs) {
           {
             filters: [
               { propertyName: 'hs_task_status', operator: 'EQ', value: 'COMPLETED' },
-              { propertyName: 'hs_lastmodifieddate', operator: 'GTE', value: String(yesterdayTs) },
+              { propertyName: 'hs_lastmodifieddate', operator: 'GTE', value: String(startMs) },
+              { propertyName: 'hs_lastmodifieddate', operator: 'LTE', value: String(endMs) },
             ],
           },
         ],
@@ -266,7 +313,7 @@ async function fetchTasksCompleted(yesterdayTs) {
 /**
  * Fetch calls logged in the last 24 hours
  */
-async function fetchCallsLogged(yesterdayTs) {
+async function fetchCallsLogged({ startMs, endMs }) {
   try {
     const c = getClient();
     return await searchAll(
@@ -275,7 +322,8 @@ async function fetchCallsLogged(yesterdayTs) {
         filterGroups: [
           {
             filters: [
-              { propertyName: 'hs_createdate', operator: 'GTE', value: String(yesterdayTs) },
+              { propertyName: 'hs_createdate', operator: 'GTE', value: String(startMs) },
+              { propertyName: 'hs_createdate', operator: 'LTE', value: String(endMs) },
             ],
           },
         ],
@@ -292,7 +340,7 @@ async function fetchCallsLogged(yesterdayTs) {
 /**
  * Fetch emails sent (1:1 sales emails) in the last 24 hours
  */
-async function fetchEmailsSent(yesterdayTs) {
+async function fetchEmailsSent({ startMs, endMs }) {
   try {
     const c = getClient();
     return await searchAll(
@@ -301,7 +349,8 @@ async function fetchEmailsSent(yesterdayTs) {
         filterGroups: [
           {
             filters: [
-              { propertyName: 'hs_createdate', operator: 'GTE', value: String(yesterdayTs) },
+              { propertyName: 'hs_createdate', operator: 'GTE', value: String(startMs) },
+              { propertyName: 'hs_createdate', operator: 'LTE', value: String(endMs) },
             ],
           },
         ],
@@ -318,7 +367,7 @@ async function fetchEmailsSent(yesterdayTs) {
 /**
  * Fetch meetings booked in the last 24 hours
  */
-async function fetchMeetingsBooked(yesterdayTs) {
+async function fetchMeetingsBooked({ startMs, endMs }) {
   try {
     const c = getClient();
     return await searchAll(
@@ -327,7 +376,8 @@ async function fetchMeetingsBooked(yesterdayTs) {
         filterGroups: [
           {
             filters: [
-              { propertyName: 'hs_createdate', operator: 'GTE', value: String(yesterdayTs) },
+              { propertyName: 'hs_createdate', operator: 'GTE', value: String(startMs) },
+              { propertyName: 'hs_createdate', operator: 'LTE', value: String(endMs) },
             ],
           },
         ],
@@ -344,7 +394,7 @@ async function fetchMeetingsBooked(yesterdayTs) {
 /**
  * Fetch notes added in the last 24 hours
  */
-async function fetchNotesAdded(yesterdayTs) {
+async function fetchNotesAdded({ startMs, endMs }) {
   try {
     const c = getClient();
     return await searchAll(
@@ -353,7 +403,8 @@ async function fetchNotesAdded(yesterdayTs) {
         filterGroups: [
           {
             filters: [
-              { propertyName: 'hs_createdate', operator: 'GTE', value: String(yesterdayTs) },
+              { propertyName: 'hs_createdate', operator: 'GTE', value: String(startMs) },
+              { propertyName: 'hs_createdate', operator: 'LTE', value: String(endMs) },
             ],
           },
         ],
@@ -370,7 +421,7 @@ async function fetchNotesAdded(yesterdayTs) {
 /**
  * Fetch contacts created in the last 24 hours
  */
-async function fetchContactsCreated(yesterdayTs) {
+async function fetchContactsCreated({ startMs, endMs }) {
   try {
     const c = getClient();
     return await searchAll(
@@ -379,7 +430,8 @@ async function fetchContactsCreated(yesterdayTs) {
         filterGroups: [
           {
             filters: [
-              { propertyName: 'createdate', operator: 'GTE', value: String(yesterdayTs) },
+              { propertyName: 'createdate', operator: 'GTE', value: String(startMs) },
+              { propertyName: 'createdate', operator: 'LTE', value: String(endMs) },
             ],
           },
         ],
@@ -396,7 +448,7 @@ async function fetchContactsCreated(yesterdayTs) {
 /**
  * Fetch companies created in the last 24 hours
  */
-async function fetchCompaniesCreated(yesterdayTs) {
+async function fetchCompaniesCreated({ startMs, endMs }) {
   try {
     const c = getClient();
     return await searchAll(
@@ -405,7 +457,8 @@ async function fetchCompaniesCreated(yesterdayTs) {
         filterGroups: [
           {
             filters: [
-              { propertyName: 'createdate', operator: 'GTE', value: String(yesterdayTs) },
+              { propertyName: 'createdate', operator: 'GTE', value: String(startMs) },
+              { propertyName: 'createdate', operator: 'LTE', value: String(endMs) },
             ],
           },
         ],
@@ -472,5 +525,6 @@ module.exports = {
   fetchContactsCreated,
   fetchCompaniesCreated,
   sendEmail,
-  getYesterdayTimestamp,
+  fetchAccountInfo,
+  getYesterdayRange,
 };

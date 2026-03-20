@@ -17,14 +17,15 @@ const {
   fetchNotesAdded,
   fetchContactsCreated,
   fetchCompaniesCreated,
-  getYesterdayTimestamp,
+  fetchAccountInfo,
+  getYesterdayRange,
 } = require('./hubspot');
 
 const { generateEmailHtml, generateSubject } = require('./emailTemplate');
 
-function formatDateEST(date) {
+function formatDate(date, timezone) {
   return date.toLocaleString('en-US', {
-    timeZone: 'America/New_York',
+    timeZone: timezone,
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -53,8 +54,18 @@ async function main() {
   console.log('='.repeat(60));
 
   const now = new Date();
-  const yesterdayTs = getYesterdayTimestamp();
-  const dateRange = `${formatDateEST(new Date(yesterdayTs))} → ${formatDateEST(now)}`;
+
+  let accountTimezone = 'America/New_York';
+  try {
+    const info = await fetchAccountInfo();
+    accountTimezone = info.timeZone;
+    console.log(`Account timezone: ${accountTimezone}`);
+  } catch (err) {
+    console.warn(`Could not fetch account timezone, defaulting to ${accountTimezone}:`, err.message);
+  }
+
+  const range = getYesterdayRange(accountTimezone);
+  const dateRange = `${formatDate(new Date(range.startMs), accountTimezone)} → ${formatDate(new Date(range.endMs), accountTimezone)}`;
   console.log(`\nFetching activities for: ${dateRange}`);
 
   const errors = [];
@@ -67,25 +78,25 @@ async function main() {
 
   console.log('\nFetching activities...');
   const [dealsCreated, dealStageChanges, tasksCompleted] = await Promise.all([
-    safelyFetch('Deals Created', () => fetchDealsCreated(yesterdayTs), errors),
-    safelyFetch('Deal Stage Changes', () => fetchDealStageChanges(yesterdayTs), errors),
-    safelyFetch('Tasks Completed', () => fetchTasksCompleted(yesterdayTs), errors),
+    safelyFetch('Deals Created', () => fetchDealsCreated(range), errors),
+    safelyFetch('Deal Stage Changes', () => fetchDealStageChanges(range), errors),
+    safelyFetch('Tasks Completed', () => fetchTasksCompleted(range), errors),
   ]);
 
   await new Promise((r) => setTimeout(r, 500));
 
   const [callsLogged, emailsSent, meetingsBooked] = await Promise.all([
-    safelyFetch('Calls Logged', () => fetchCallsLogged(yesterdayTs), errors),
-    safelyFetch('Emails Sent', () => fetchEmailsSent(yesterdayTs), errors),
-    safelyFetch('Meetings Booked', () => fetchMeetingsBooked(yesterdayTs), errors),
+    safelyFetch('Calls Logged', () => fetchCallsLogged(range), errors),
+    safelyFetch('Emails Sent', () => fetchEmailsSent(range), errors),
+    safelyFetch('Meetings Booked', () => fetchMeetingsBooked(range), errors),
   ]);
 
   await new Promise((r) => setTimeout(r, 500));
 
   const [notesAdded, contactsCreated, companiesCreated] = await Promise.all([
-    safelyFetch('Notes Added', () => fetchNotesAdded(yesterdayTs), errors),
-    safelyFetch('Contacts Created', () => fetchContactsCreated(yesterdayTs), errors),
-    safelyFetch('Companies Created', () => fetchCompaniesCreated(yesterdayTs), errors),
+    safelyFetch('Notes Added', () => fetchNotesAdded(range), errors),
+    safelyFetch('Contacts Created', () => fetchContactsCreated(range), errors),
+    safelyFetch('Companies Created', () => fetchCompaniesCreated(range), errors),
   ]);
 
   const data = {
@@ -111,7 +122,7 @@ async function main() {
     errors,
   });
 
-  const subject = generateSubject(formatDateEST(now).split(',')[0], totalActivities);
+  const subject = generateSubject(formatDate(now, accountTimezone).split(',')[0], totalActivities);
 
   const outPath = path.join(__dirname, '..', 'digest-preview.html');
   fs.writeFileSync(outPath, htmlBody, 'utf8');
