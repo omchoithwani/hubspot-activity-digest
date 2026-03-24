@@ -12,15 +12,13 @@ services:
       - key: NODE_ENV
         value: production
       - key: ADMIN_TOKEN
-        sync: false   # Protect the /setup page — set a strong random token in the Render dashboard
+        sync: false
       - key: TRIGGER_TOKEN
-        sync: false   # Optional: protect the POST /trigger endpoint
-      # Turso database (free cloud SQLite)
+        sync: false
       - key: TURSO_DATABASE_URL
-        sync: false   # e.g. libsql://your-db-name.turso.io
+        sync: false
       - key: TURSO_AUTH_TOKEN
-        sync: false   # Turso auth token
-      # SMTP — Hostinger
+        sync: false
       - key: SMTP_HOST
         value: smtp.hostinger.com
       - key: SMTP_PORT
@@ -28,7 +26,7 @@ services:
       - key: SMTP_USER
         value: om.choithwani@aero-rev.com
       - key: SMTP_PASS
-        sync: false   # Your Hostinger email password
+        sync: false
       - key: FROM_EMAIL
         value: om.choithwani@aero-rev.com
       - key: FROM_NAME
@@ -39,42 +37,49 @@ services:
     name: hubspot-digest-cron
     runtime: node
     region: oregon
-    plan: free
     schedule: "0 22 * * *"
     buildCommand: npm install
     startCommand: node src/digest.js
     envVars:
       - key: NODE_ENV
         value: production
-      - fromService:
+      - key: TURSO_DATABASE_URL
+        fromService:
           type: web
           name: hubspot-digest
           envVarKey: TURSO_DATABASE_URL
-      - fromService:
+      - key: TURSO_AUTH_TOKEN
+        fromService:
           type: web
           name: hubspot-digest
           envVarKey: TURSO_AUTH_TOKEN
-      - fromService:
+      - key: SMTP_HOST
+        fromService:
           type: web
           name: hubspot-digest
           envVarKey: SMTP_HOST
-      - fromService:
+      - key: SMTP_PORT
+        fromService:
           type: web
           name: hubspot-digest
           envVarKey: SMTP_PORT
-      - fromService:
+      - key: SMTP_USER
+        fromService:
           type: web
           name: hubspot-digest
           envVarKey: SMTP_USER
-      - fromService:
+      - key: SMTP_PASS
+        fromService:
           type: web
           name: hubspot-digest
           envVarKey: SMTP_PASS
-      - fromService:
+      - key: FROM_EMAIL
+        fromService:
           type: web
           name: hubspot-digest
           envVarKey: FROM_EMAIL
-      - fromService:
+      - key: FROM_NAME
+        fromService:
           type: web
           name: hubspot-digest
           envVarKey: FROM_NAME
