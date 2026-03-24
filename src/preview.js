@@ -15,6 +15,7 @@ const {
   fetchEmailsSent,
   fetchMeetingsBooked,
   fetchNotesAdded,
+  fetchNoteAssociations,
   fetchContactsCreated,
   fetchCompaniesCreated,
   fetchAccountInfo,
@@ -102,6 +103,15 @@ async function main() {
 
   const formsSubmitted = await safelyFetch('Form Submissions', () => fetchFormsSubmitted(range), errors);
 
+  let noteAssociations = {};
+  if (notesAdded.length > 0) {
+    try {
+      noteAssociations = await fetchNoteAssociations(notesAdded.map((n) => n.id));
+    } catch (err) {
+      console.warn(`  ✗ Note Associations: ${err.message}`);
+    }
+  }
+
   const data = {
     dealsCreated,
     dealStageChanges,
@@ -113,6 +123,7 @@ async function main() {
     contactsCreated,
     companiesCreated,
     formsSubmitted,
+    noteAssociations,
   };
 
   const totalFormSubmissions = formsSubmitted.reduce((s, f) => s + f.count, 0);
