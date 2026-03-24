@@ -219,14 +219,11 @@ async function fetchDealStageChanges({ startMs, endMs }) {
       const historyPromises = batch.map(async (deal) => {
         try {
           const history = await withRetry(() =>
-            c.crm.deals.propertiesApi.getAll('deals', false)
-              .then(() =>
-                c.apiRequest({
-                  method: 'GET',
-                  path: `/crm/v3/objects/deals/${deal.id}`,
-                  qs: { propertiesWithHistory: 'dealstage' },
-                })
-              )
+            c.apiRequest({
+              method: 'GET',
+              path: `/crm/v3/objects/deals/${deal.id}`,
+              qs: { propertiesWithHistory: 'dealstage' },
+            })
           );
 
           const stageHistory = history?.propertiesWithHistory?.dealstage || [];
@@ -533,10 +530,12 @@ async function fetchFormsSubmitted({ startMs, endMs }) {
     const c = getClient();
 
     // List all forms in the portal
+    console.log('[forms] calling /marketing/v3/forms...');
     const formsResp = await withRetry(() =>
       c.apiRequest({ method: 'GET', path: '/marketing/v3/forms', qs: { limit: 200 } })
     );
-    const forms = formsResp.results || [];
+    console.log('[forms] raw response keys:', formsResp ? Object.keys(formsResp) : formsResp);
+    const forms = formsResp?.results || [];
     console.log(`[forms] found ${forms.length} forms in portal`);
 
     const results = [];
