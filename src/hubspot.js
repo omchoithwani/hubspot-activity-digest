@@ -218,50 +218,43 @@ async function fetchDealStageChanges({ startMs, endMs }) {
       const batch = modifiedDeals.slice(i, i + batchSize);
       const historyPromises = batch.map(async (deal) => {
         try {
-          const history = await withRetry(() =>
+          const raw = await withRetry(() =>
             c.apiRequest({
               method: 'GET',
               path: `/crm/v3/objects/deals/${deal.id}`,
               qs: { propertiesWithHistory: 'dealstage' },
             })
           );
+          const history = raw?.json ? await raw.json() : raw;
 
           const stageHistory = history?.propertiesWithHistory?.dealstage || [];
-          const recentChanges = stageHistory.filter((entry) => {
+
+          // All changes that occurred within the window (newest-first)
+          const windowChanges = stageHistory.filter((entry) => {
             const ts = new Date(entry.timestamp).getTime();
             return ts >= startMs && ts < endMs;
           });
 
-          if (recentChanges.length >= 2) {
-            // Most recent is index 0, previous is index 1
-            const toStage = recentChanges[0].value;
-            const fromStage = recentChanges[1].value;
-            if (fromStage !== toStage) {
-              stageChanges.push({
-                id: deal.id,
-                dealname: deal.properties.dealname,
-                hubspot_owner_id: deal.properties.hubspot_owner_id,
-                pipeline: deal.properties.pipeline,
-                fromStage,
-                toStage,
-                changedAt: recentChanges[0].timestamp,
-              });
-            }
-          } else if (recentChanges.length === 1 && stageHistory.length >= 2) {
-            // Only one recent change; compare to previous entry
-            const toStage = recentChanges[0].value;
-            const fromStage = stageHistory[1].value;
-            if (fromStage !== toStage) {
-              stageChanges.push({
-                id: deal.id,
-                dealname: deal.properties.dealname,
-                hubspot_owner_id: deal.properties.hubspot_owner_id,
-                pipeline: deal.properties.pipeline,
-                fromStage,
-                toStage,
-                changedAt: recentChanges[0].timestamp,
-              });
-            }
+          if (windowChanges.length === 0) return;
+
+          // toStage = deal's current stage (already fetched in search)
+          const toStage = deal.properties.dealstage;
+
+          // fromStage = stage just before the oldest change in the window
+          const oldestChange = windowChanges[windowChanges.length - 1];
+          const oldestIdx = stageHistory.indexOf(oldestChange);
+          const fromStage = stageHistory[oldestIdx + 1]?.value;
+
+          if (fromStage && fromStage !== toStage) {
+            stageChanges.push({
+              id: deal.id,
+              dealname: deal.properties.dealname,
+              hubspot_owner_id: deal.properties.hubspot_owner_id,
+              pipeline: deal.properties.pipeline,
+              fromStage,
+              toStage,
+              changedAt: windowChanges[0].timestamp,
+            });
           }
         } catch (err) {
           console.warn(`Failed to fetch history for deal ${deal.id}:`, err.message);
