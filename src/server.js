@@ -246,7 +246,7 @@ app.post('/setup/tenants/:id/delete', requireAdmin, async (req, res) => {
   res.redirect(`/setup${tokenParam}`);
 });
 
-// Send digest now for a single tenant
+// Send digest now for a single tenant (async — responds immediately to avoid proxy timeouts)
 app.post('/setup/tenants/:id/send', requireAdmin, async (req, res) => {
   const tokenParam = process.env.ADMIN_TOKEN ? `?token=${process.env.ADMIN_TOKEN}` : '';
   const tenant = await getTenant(Number(req.params.id));
@@ -255,22 +255,26 @@ app.post('/setup/tenants/:id/send', requireAdmin, async (req, res) => {
     return res.send(setupPage(tenants, 'Tenant not found.'));
   }
 
+  // Respond immediately so the proxy doesn't time out
+  const tenants = await getAllTenants();
+  res.send(setupPage(tenants, `⏳ Sending digest for ${tenant.name}… refresh the page in a moment to see the result.`));
+
+  // Run in background
   const { runDigest } = require('./digest');
   const { updateTenantDigestStatus } = require('./db');
-
-  try {
-    await runDigest({
-      hubspotApiKey: tenant.hubspot_api_key,
-      recipients: tenant.recipient_emails,
-    });
-    await updateTenantDigestStatus(tenant.id, 'success');
-    const tenants = await getAllTenants();
-    return res.send(setupPage(tenants, `✓ Digest sent for ${tenant.name}.`));
-  } catch (err) {
-    await updateTenantDigestStatus(tenant.id, `error: ${err.message.slice(0, 200)}`);
-    const tenants = await getAllTenants();
-    return res.send(setupPage(tenants, `Failed to send digest for ${tenant.name}: ${err.message}`));
-  }
+  (async () => {
+    try {
+      await runDigest({
+        hubspotApiKey: tenant.hubspot_api_key,
+        recipients: tenant.recipient_emails,
+      });
+      await updateTenantDigestStatus(tenant.id, 'success');
+      console.log(`[send-now] Digest sent for tenant: ${tenant.name}`);
+    } catch (err) {
+      await updateTenantDigestStatus(tenant.id, `error: ${err.message.slice(0, 200)}`);
+      console.error(`[send-now] Digest failed for ${tenant.name}:`, err.message);
+    }
+  })();
 });
 
 // Manual trigger endpoint (protected by TRIGGER_TOKEN)
