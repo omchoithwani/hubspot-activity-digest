@@ -492,10 +492,12 @@ async function fetchSubmissionsForForm(formId, startMs, endMs) {
 
     const page = resp.results || [];
 
-    // On the first page, log the raw structure of the first submission so we
-    // can verify the field names / timestamp format coming back from the API.
-    if (firstPage && page.length > 0) {
-      console.log(`[forms] first submission sample for form ${formId}:`, JSON.stringify(page[0]).slice(0, 300));
+    if (firstPage) {
+      if (page.length > 0) {
+        console.log(`[forms] first submission sample for form ${formId}:`, JSON.stringify(page[0]).slice(0, 300));
+      } else {
+        console.log(`[forms] form ${formId}: first page is empty (no submissions at all)`);
+      }
       firstPage = false;
     }
 
@@ -535,10 +537,12 @@ async function fetchFormsSubmitted({ startMs, endMs }) {
       c.apiRequest({ method: 'GET', path: '/marketing/v3/forms', qs: { limit: 200 } })
     );
     const forms = formsResp.results || [];
+    console.log(`[forms] found ${forms.length} forms in portal`);
 
     const results = [];
     for (const form of forms) {
       const submissions = await fetchSubmissionsForForm(form.id, startMs, endMs);
+      console.log(`[forms] ${form.name || form.id}: ${submissions.length} submissions in window`);
       if (submissions.length > 0) {
         results.push({ formId: form.id, formName: form.name || form.id, count: submissions.length, submissions });
       }
