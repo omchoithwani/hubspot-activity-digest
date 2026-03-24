@@ -22,15 +22,27 @@ function formatAmount(amount) {
 }
 
 /**
- * Format a date string
+ * Format a date string (with time)
  */
 function formatDate(dateStr) {
-  if (!dateStr) return 'Unknown';
+  if (!dateStr) return '—';
   try {
     return new Date(dateStr).toLocaleDateString('en-US', {
       month: 'short', day: 'numeric', year: 'numeric',
       hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
     });
+  } catch {
+    return dateStr;
+  }
+}
+
+/**
+ * Format a date string (date only, no time)
+ */
+function formatDateOnly(dateStr) {
+  if (!dateStr) return '—';
+  try {
+    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   } catch {
     return dateStr;
   }
@@ -142,6 +154,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
     contactsCreated = [],
     companiesCreated = [],
     formsSubmitted = [],
+    noteAssociations = {},
   } = data;
 
   function ownerName(id) {
@@ -191,8 +204,11 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
   // Deals created table
   const dealsCreatedRows = dealsCreated.map((d) => {
     const amount = formatAmount(d.properties?.amount);
+    const pipeline = stageMap[d.properties?.dealstage]?.pipeline || '—';
     return [
       `<strong style="color:${WHITE};">${d.properties?.dealname || 'Unnamed Deal'}</strong>`,
+      formatDateOnly(d.properties?.createdate),
+      pipeline,
       stageName(d.properties?.dealstage) || '—',
       amount ? `<span style="color:${LIME};">${amount}</span>` : '—',
       ownerName(d.properties?.hubspot_owner_id),
@@ -211,6 +227,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
   const tasksRows = tasksCompleted.map((t) => [
     `<strong style="color:${WHITE};">${t.properties?.hs_task_subject || 'Untitled Task'}</strong>`,
     t.properties?.hs_task_type || '—',
+    formatDateOnly(t.properties?.hs_task_due_date),
     ownerName(t.properties?.hubspot_owner_id),
   ]);
 
@@ -220,6 +237,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
     const durationStr = duration ? `${Math.round(duration / 60000)}m` : '—';
     return [
       `<strong style="color:${WHITE};">${c.properties?.hs_call_title || 'Call'}</strong>`,
+      formatDate(c.properties?.hs_createdate),
       c.properties?.hs_call_direction || '—',
       durationStr,
       ownerName(c.properties?.hubspot_owner_id),
@@ -229,7 +247,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
   // Emails sent table
   const emailRows = emailsSent.map((e) => [
     `<strong style="color:${WHITE};">${e.properties?.hs_email_subject || 'No Subject'}</strong>`,
-    e.properties?.hs_email_direction || '—',
+    e.properties?.hs_email_to_email || '—',
     badge(e.properties?.hs_email_status || 'SENT', '#0A1A2A', LIME),
     ownerName(e.properties?.hubspot_owner_id),
   ]);
@@ -243,10 +261,15 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
   ]);
 
   // Notes table
-  const noteRows = notesAdded.map((n) => [
-    `<span style="color:${WHITE};">${truncate(n.properties?.hs_note_body, 100) || 'No content'}</span>`,
-    ownerName(n.properties?.hubspot_owner_id),
-  ]);
+  const noteRows = notesAdded.map((n) => {
+    const assoc = noteAssociations[n.id] || { contacts: [], deals: [] };
+    return [
+      `<span style="color:${WHITE};">${truncate(n.properties?.hs_note_body, 100) || 'No content'}</span>`,
+      assoc.contacts.length > 0 ? assoc.contacts.join(', ') : '—',
+      assoc.deals.length > 0 ? assoc.deals.join(', ') : '—',
+      ownerName(n.properties?.hubspot_owner_id),
+    ];
+  });
 
   // Contacts created table
   const contactRows = contactsCreated.map((c) => {
@@ -255,6 +278,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
       `<strong style="color:${WHITE};">${name}</strong>`,
       c.properties?.email || '—',
       c.properties?.company || '—',
+      formatDateOnly(c.properties?.createdate),
       ownerName(c.properties?.hubspot_owner_id),
     ];
   });
@@ -264,6 +288,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
     `<strong style="color:${WHITE};">${c.properties?.name || 'Unknown'}</strong>`,
     c.properties?.domain || '—',
     c.properties?.industry || '—',
+    formatDateOnly(c.properties?.createdate),
     ownerName(c.properties?.hubspot_owner_id),
   ]);
 
@@ -368,7 +393,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
                 ${dealsCreated.length > 0 ? `
                 ${sectionHeader('💼', 'Deals Created', dealsCreated.length)}
                 ${activityTable(
-                  ['Deal Name', 'Stage', 'Amount', 'Owner'],
+                  ['Deal Name', 'Created', 'Pipeline', 'Stage', 'Amount', 'Owner'],
                   dealsCreatedRows
                 )}` : ''}
 
@@ -384,7 +409,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
                 ${tasksCompleted.length > 0 ? `
                 ${sectionHeader('✅', 'Tasks Completed', tasksCompleted.length)}
                 ${activityTable(
-                  ['Task Subject', 'Type', 'Owner'],
+                  ['Task Subject', 'Type', 'Due Date', 'Owner'],
                   tasksRows
                 )}` : ''}
 
@@ -392,7 +417,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
                 ${callsLogged.length > 0 ? `
                 ${sectionHeader('📞', 'Calls Logged', callsLogged.length)}
                 ${activityTable(
-                  ['Title', 'Direction', 'Duration', 'Owner'],
+                  ['Title', 'Time', 'Direction', 'Duration', 'Owner'],
                   callsRows
                 )}` : ''}
 
@@ -400,7 +425,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
                 ${emailsSent.length > 0 ? `
                 ${sectionHeader('📧', 'Emails Sent', emailsSent.length)}
                 ${activityTable(
-                  ['Subject', 'Direction', 'Status', 'Owner'],
+                  ['Subject', 'To', 'Status', 'Owner'],
                   emailRows
                 )}` : ''}
 
@@ -416,7 +441,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
                 ${notesAdded.length > 0 ? `
                 ${sectionHeader('📝', 'Notes Added', notesAdded.length)}
                 ${activityTable(
-                  ['Note Preview', 'Owner'],
+                  ['Note Preview', 'Contact', 'Deal', 'Owner'],
                   noteRows
                 )}` : ''}
 
@@ -424,7 +449,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
                 ${contactsCreated.length > 0 ? `
                 ${sectionHeader('👤', 'Contacts Created', contactsCreated.length)}
                 ${activityTable(
-                  ['Name', 'Email', 'Company', 'Owner'],
+                  ['Name', 'Email', 'Company', 'Created', 'Owner'],
                   contactRows
                 )}` : ''}
 
@@ -432,7 +457,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
                 ${companiesCreated.length > 0 ? `
                 ${sectionHeader('🏢', 'Companies Created', companiesCreated.length)}
                 ${activityTable(
-                  ['Company Name', 'Domain', 'Industry', 'Owner'],
+                  ['Company Name', 'Domain', 'Industry', 'Created', 'Owner'],
                   companyRows
                 )}` : ''}
 

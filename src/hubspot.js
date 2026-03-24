@@ -173,7 +173,7 @@ async function fetchDealsCreated({ startMs, endMs }) {
             ],
           },
         ],
-        properties: ['dealname', 'dealstage', 'amount', 'hubspot_owner_id', 'pipeline', 'closedate', 'hs_deal_stage_probability'],
+        properties: ['dealname', 'dealstage', 'amount', 'hubspot_owner_id', 'pipeline', 'closedate', 'hs_deal_stage_probability', 'createdate'],
         sorts: [{ propertyName: 'createdate', direction: 'DESCENDING' }],
       }
     );
@@ -300,7 +300,7 @@ async function fetchTasksCompleted({ startMs, endMs }) {
             ],
           },
         ],
-        properties: ['hs_task_subject', 'hs_task_type', 'hubspot_owner_id', 'hs_task_body', 'hs_timestamp'],
+        properties: ['hs_task_subject', 'hs_task_type', 'hubspot_owner_id', 'hs_task_body', 'hs_timestamp', 'hs_task_due_date'],
         sorts: [{ propertyName: 'hs_lastmodifieddate', direction: 'DESCENDING' }],
       }
     );
@@ -327,7 +327,7 @@ async function fetchCallsLogged({ startMs, endMs }) {
             ],
           },
         ],
-        properties: ['hs_call_title', 'hs_call_direction', 'hs_call_duration', 'hs_call_disposition', 'hubspot_owner_id', 'hs_call_body'],
+        properties: ['hs_call_title', 'hs_call_direction', 'hs_call_duration', 'hs_call_disposition', 'hubspot_owner_id', 'hs_call_body', 'hs_createdate'],
         sorts: ['-hs_createdate'],
       }
     );
@@ -354,7 +354,7 @@ async function fetchEmailsSent({ startMs, endMs }) {
             ],
           },
         ],
-        properties: ['hs_email_subject', 'hs_email_direction', 'hs_email_status', 'hubspot_owner_id'],
+        properties: ['hs_email_subject', 'hs_email_direction', 'hs_email_status', 'hubspot_owner_id', 'hs_email_to_email'],
         sorts: ['-hs_createdate'],
       }
     );
@@ -435,7 +435,7 @@ async function fetchContactsCreated({ startMs, endMs }) {
             ],
           },
         ],
-        properties: ['firstname', 'lastname', 'email', 'company', 'hubspot_owner_id', 'jobtitle'],
+        properties: ['firstname', 'lastname', 'email', 'company', 'hubspot_owner_id', 'jobtitle', 'createdate'],
         sorts: [{ propertyName: 'createdate', direction: 'DESCENDING' }],
       }
     );
@@ -462,7 +462,7 @@ async function fetchCompaniesCreated({ startMs, endMs }) {
             ],
           },
         ],
-        properties: ['name', 'domain', 'industry', 'hubspot_owner_id', 'city', 'country'],
+        properties: ['name', 'domain', 'industry', 'hubspot_owner_id', 'city', 'country', 'createdate'],
         sorts: [{ propertyName: 'createdate', direction: 'DESCENDING' }],
       }
     );
@@ -554,6 +554,82 @@ async function fetchFormsSubmitted({ startMs, endMs }) {
 }
 
 /**
+ * Given an array of note IDs, return a map of noteId → { contacts: [name…], deals: [name…] }
+ * using the CRM v4 batch associations API.
+ */
+async function fetchNoteAssociations(noteIds) {
+  if (noteIds.length === 0) return {};
+  const c = getClient();
+  const assocMap = {};
+  noteIds.forEach((id) => { assocMap[id] = { contacts: [], deals: [] }; });
+
+  async function batchAssoc(toType) {
+    const resp = await withRetry(() =>
+      c.apiRequest({
+        method: 'POST',
+        path: `/crm/v4/associations/notes/${toType}/batch/read`,
+        body: { inputs: noteIds.map((id) => ({ id })) },
+      })
+    );
+    const map = {};
+    for (const r of resp.results || []) {
+      map[String(r.from.id)] = (r.to || []).map((t) => String(t.toObjectId));
+    }
+    return map;
+  }
+
+  // Contacts
+  try {
+    const noteToContactIds = await batchAssoc('contacts');
+    const allContactIds = [...new Set(Object.values(noteToContactIds).flat())];
+    if (allContactIds.length > 0) {
+      const batch = await withRetry(() =>
+        c.crm.contacts.batchApi.read({
+          inputs: allContactIds.map((id) => ({ id })),
+          properties: ['firstname', 'lastname', 'email'],
+          propertiesWithHistory: [],
+        })
+      );
+      const nameMap = {};
+      for (const ct of batch.results || []) {
+        nameMap[ct.id] = [ct.properties?.firstname, ct.properties?.lastname].filter(Boolean).join(' ') || ct.properties?.email || ct.id;
+      }
+      for (const [noteId, cIds] of Object.entries(noteToContactIds)) {
+        assocMap[noteId].contacts = cIds.map((id) => nameMap[id]).filter(Boolean);
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to fetch note→contact associations:', err.message);
+  }
+
+  // Deals
+  try {
+    const noteToDealIds = await batchAssoc('deals');
+    const allDealIds = [...new Set(Object.values(noteToDealIds).flat())];
+    if (allDealIds.length > 0) {
+      const batch = await withRetry(() =>
+        c.crm.deals.batchApi.read({
+          inputs: allDealIds.map((id) => ({ id })),
+          properties: ['dealname'],
+          propertiesWithHistory: [],
+        })
+      );
+      const nameMap = {};
+      for (const dl of batch.results || []) {
+        nameMap[dl.id] = dl.properties?.dealname || dl.id;
+      }
+      for (const [noteId, dIds] of Object.entries(noteToDealIds)) {
+        assocMap[noteId].deals = dIds.map((id) => nameMap[id]).filter(Boolean);
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to fetch note→deal associations:', err.message);
+  }
+
+  return assocMap;
+}
+
+/**
  * Send email via HubSpot Single Send API (transactional)
  */
 async function sendEmail({ toEmails, subject, htmlBody }) {
@@ -603,6 +679,7 @@ module.exports = {
   fetchEmailsSent,
   fetchMeetingsBooked,
   fetchNotesAdded,
+  fetchNoteAssociations,
   fetchContactsCreated,
   fetchCompaniesCreated,
   sendEmail,

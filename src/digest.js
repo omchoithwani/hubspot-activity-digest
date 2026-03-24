@@ -12,6 +12,7 @@ const {
   fetchEmailsSent,
   fetchMeetingsBooked,
   fetchNotesAdded,
+  fetchNoteAssociations,
   fetchContactsCreated,
   fetchCompaniesCreated,
   sendEmail,
@@ -124,6 +125,18 @@ async function generateDigest(options = {}) {
   // Form submissions are sequential (one request per form), fetch after the parallel batch
   const formsSubmitted = await safelyFetch('Form Submissions', () => fetchFormsSubmitted(range), errors);
 
+  // Note associations (contact + deal names) — sequential after notes are known
+  let noteAssociations = {};
+  if (notesAdded.length > 0) {
+    try {
+      noteAssociations = await fetchNoteAssociations(notesAdded.map((n) => n.id));
+      console.log(`  ✓ Note Associations: fetched for ${notesAdded.length} notes`);
+    } catch (err) {
+      console.warn(`  ✗ Note Associations: ${err.message}`);
+      errors.push(`Note Associations: ${err.message}`);
+    }
+  }
+
   const data = {
     dealsCreated,
     dealStageChanges,
@@ -135,6 +148,7 @@ async function generateDigest(options = {}) {
     contactsCreated,
     companiesCreated,
     formsSubmitted,
+    noteAssociations,
   };
 
   const totalFormSubmissions = formsSubmitted.reduce((s, f) => s + f.count, 0);
