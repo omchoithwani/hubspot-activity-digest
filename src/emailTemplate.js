@@ -124,16 +124,17 @@ function activityRow(cells, isAlt = false) {
 function activityTable(headers, rows, viewMoreUrl) {
   if (rows.length === 0) return `<tr><td><p style="color:${TEXT_MUTED};font-style:italic;font-family:'DM Sans',Arial,sans-serif;font-size:13px;padding:8px 0;">No activity recorded.</p></td></tr>`;
 
-  const truncated = viewMoreUrl && rows.length > VIEW_MORE_LIMIT;
+  const truncated = rows.length > VIEW_MORE_LIMIT;
   const visibleRows = truncated ? rows.slice(0, VIEW_MORE_LIMIT) : rows;
   const hiddenCount = rows.length - VIEW_MORE_LIMIT;
 
   const viewMoreRow = truncated ? `
     <tr style="background:${LIGHT_GRAY};">
       <td colspan="${headers.length}" style="padding:12px 14px;text-align:center;border-top:1px solid ${BORDER};">
-        <a href="${viewMoreUrl}" style="font-size:12px;font-weight:700;color:${RED};font-family:'DM Sans',Arial,sans-serif;text-decoration:none;">
-          View ${hiddenCount} more record${hiddenCount !== 1 ? 's' : ''} &rarr;
-        </a>
+        ${viewMoreUrl
+          ? `<a href="${viewMoreUrl}" style="font-size:12px;font-weight:700;color:${RED};font-family:'DM Sans',Arial,sans-serif;text-decoration:none;">View ${hiddenCount} more record${hiddenCount !== 1 ? 's' : ''} &rarr;</a>`
+          : `<span style="font-size:12px;color:${TEXT_MUTED};font-family:'DM Sans',Arial,sans-serif;">+ ${hiddenCount} more record${hiddenCount !== 1 ? 's' : ''} not shown</span>`
+        }
       </td>
     </tr>` : '';
 
