@@ -21,17 +21,17 @@ services:
         sync: false   # Protect the /setup page — set a strong random token
       - key: TRIGGER_TOKEN
         sync: false   # Optional: protect the POST /trigger endpoint
-      # SMTP settings — all tenants' emails are sent through this server
+      # SMTP settings — Hostinger email
       - key: SMTP_HOST
-        sync: false   # e.g. smtp.gmail.com / smtp.sendgrid.net / smtp.resend.com
+        value: smtp.hostinger.com
       - key: SMTP_PORT
-        value: "587"  # 587 for TLS (STARTTLS), 465 for SSL
+        value: "587"
       - key: SMTP_USER
-        sync: false   # e.g. apikey (SendGrid) or your email address (Gmail)
+        value: om.choithwani@aero-rev.com
       - key: SMTP_PASS
-        sync: false   # SMTP password or API key
+        sync: false   # Your Hostinger email password — set this in the Render dashboard
       - key: FROM_EMAIL
-        sync: false   # Sender address shown in the email (must be verified with your SMTP provider)
+        value: om.choithwani@aero-rev.com
       - key: FROM_NAME
         value: "HubSpot Digest"
 
