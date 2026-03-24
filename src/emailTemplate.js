@@ -231,16 +231,24 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
 
   // Build ad leads table rows
   const adLeadRows = adLeads.map((lead) => {
-    const name = [lead.properties?.firstname, lead.properties?.lastname].filter(Boolean).join(' ') || '—';
-    const platform = platformLabel(lead.properties?.hs_latest_source_data_1);
-    const campaign = lead.properties?.hs_latest_source_data_2 || lead.properties?.hs_analytics_source_data_2 || '—';
+    const p = lead.properties || {};
+    const name = [p.firstname, p.lastname].filter(Boolean).join(' ') || '—';
+    // Prefer latest-touch attribution; fall back to first-touch (hs_analytics_source_data_*)
+    const rawPlatform = p.hs_latest_source_data_1 || p.hs_analytics_source_data_1;
+    const platform = platformLabel(rawPlatform);
+    const campaign = p.hs_latest_source_data_2 || p.hs_analytics_source_data_2 || '—';
+    const PAID = new Set(['PAID_SEARCH', 'PAID_SOCIAL']);
+    const source = PAID.has(p.hs_latest_source) ? p.hs_latest_source
+                 : PAID.has(p.hs_analytics_source) ? p.hs_analytics_source
+                 : p.hs_latest_source || '—';
+    const sourceLabel = source === 'PAID_SEARCH' ? 'Search' : source === 'PAID_SOCIAL' ? 'Social' : source;
     return [
       `<strong>${name}</strong>`,
-      lead.properties?.email || '—',
-      lead.properties?.company || '—',
-      platform,
+      p.email || '—',
+      p.company || '—',
+      `${platform}<span style="color:${TEXT_MUTED};font-size:11px;margin-left:4px;">(${sourceLabel})</span>`,
       campaign,
-      formatDateOnly(lead.properties?.createdate),
+      formatDateOnly(p.createdate),
     ];
   });
 

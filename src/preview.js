@@ -21,6 +21,7 @@ const {
   fetchAccountInfo,
   getYesterdayRange,
   fetchFormsSubmitted,
+  fetchAdLeads,
 } = require('./hubspot');
 
 const { generateEmailHtml, generateSubject } = require('./emailTemplate');
@@ -103,6 +104,8 @@ async function main() {
 
   const formsSubmitted = await safelyFetch('Form Submissions', () => fetchFormsSubmitted(range), errors);
 
+  const adLeads = await safelyFetch('Ad Leads', () => fetchAdLeads(range), errors);
+
   let noteAssociations = {};
   if (notesAdded.length > 0) {
     try {
@@ -124,6 +127,7 @@ async function main() {
     companiesCreated,
     formsSubmitted,
     noteAssociations,
+    adLeads,
   };
 
   const totalFormSubmissions = formsSubmitted.reduce((s, f) => s + f.count, 0);

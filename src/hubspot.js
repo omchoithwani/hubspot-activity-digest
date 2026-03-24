@@ -557,38 +557,48 @@ async function fetchFormsSubmitted({ startMs, endMs }) {
 async function fetchAdLeads({ startMs, endMs }) {
   try {
     const c = getClient();
-    // Each filterGroup is OR'd; filters within a group are AND'd
-    return await searchAll(
+
+    const dateFilters = [
+      { propertyName: 'createdate', operator: 'GTE', value: String(startMs) },
+      { propertyName: 'createdate', operator: 'LTE', value: String(endMs) },
+    ];
+
+    // OR across latest-touch and original-touch for both paid channels,
+    // so a lead isn't missed if they had a subsequent non-ad interaction.
+    const paidSources = ['PAID_SEARCH', 'PAID_SOCIAL'];
+    const filterGroups = [
+      ...paidSources.map((src) => ({
+        filters: [...dateFilters, { propertyName: 'hs_latest_source', operator: 'EQ', value: src }],
+      })),
+      ...paidSources.map((src) => ({
+        filters: [...dateFilters, { propertyName: 'hs_analytics_source', operator: 'EQ', value: src }],
+      })),
+    ];
+
+    const results = await searchAll(
       (params) => c.crm.contacts.searchApi.doSearch(params),
       {
-        filterGroups: [
-          {
-            filters: [
-              { propertyName: 'createdate', operator: 'GTE', value: String(startMs) },
-              { propertyName: 'createdate', operator: 'LTE', value: String(endMs) },
-              { propertyName: 'hs_latest_source', operator: 'EQ', value: 'PAID_SEARCH' },
-            ],
-          },
-          {
-            filters: [
-              { propertyName: 'createdate', operator: 'GTE', value: String(startMs) },
-              { propertyName: 'createdate', operator: 'LTE', value: String(endMs) },
-              { propertyName: 'hs_latest_source', operator: 'EQ', value: 'PAID_SOCIAL' },
-            ],
-          },
-        ],
+        filterGroups,
         properties: [
           'firstname', 'lastname', 'email', 'company', 'jobtitle', 'createdate',
           'hs_latest_source',
-          'hs_latest_source_data_1',  // platform, e.g. "google", "facebook.com"
-          'hs_latest_source_data_2',  // campaign name
+          'hs_latest_source_data_1',    // platform (latest touch), e.g. "google"
+          'hs_latest_source_data_2',    // campaign (latest touch)
           'hs_analytics_source',
-          'hs_analytics_source_data_1',
-          'hs_analytics_source_data_2',
+          'hs_analytics_source_data_1', // platform (first touch)
+          'hs_analytics_source_data_2', // campaign (first touch)
         ],
         sorts: [{ propertyName: 'createdate', direction: 'DESCENDING' }],
       }
     );
+
+    // De-duplicate in case a contact matched multiple filter groups
+    const seen = new Set();
+    return results.filter((r) => {
+      if (seen.has(r.id)) return false;
+      seen.add(r.id);
+      return true;
+    });
   } catch (err) {
     console.error('Failed to fetch ad leads:', err.message);
     throw err;
