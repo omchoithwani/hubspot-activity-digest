@@ -18,10 +18,29 @@ const endMs = todayMidnight.getTime();
 console.log(`Window: ${yesterdayMidnight.toISOString()} → ${todayMidnight.toISOString()}\n`);
 
 async function run() {
-  // 1. List all forms
-  const formsResp = await c.apiRequest({ method: 'GET', path: '/marketing/v3/forms', qs: { limit: 200 } });
-  const forms = formsResp.results || [];
-  console.log(`Found ${forms.length} form(s)\n`);
+  // 1. List all forms — try v3 first, fall back to v2
+  let forms = [];
+  try {
+    const formsResp = await c.apiRequest({ method: 'GET', path: '/marketing/v3/forms', qs: { limit: 200 } });
+    forms = formsResp.results || [];
+    console.log(`v3 forms API: ${forms.length} form(s)`);
+  } catch (e) {
+    console.log(`v3 forms API failed: ${e.message}`);
+  }
+
+  if (forms.length === 0) {
+    try {
+      const formsResp2 = await c.apiRequest({ method: 'GET', path: '/forms/v2/forms' });
+      forms = Array.isArray(formsResp2) ? formsResp2 : (formsResp2.results || []);
+      console.log(`v2 forms API: ${forms.length} form(s)`);
+      // v2 uses guid instead of id
+      forms = forms.map(f => ({ ...f, id: f.id || f.guid }));
+    } catch (e) {
+      console.log(`v2 forms API failed: ${e.message}`);
+    }
+  }
+
+  console.log();
 
   for (const form of forms) {
     // 2. Fetch first page of submissions for each form
