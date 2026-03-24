@@ -249,32 +249,70 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
     })
     .sort((a, b) => b.total - a.total);
 
-  function activityPill(count, label) {
-    if (!count) return '';
-    return `<span style="display:inline-block;background:${LIGHT_GRAY};color:${TEXT_MAIN};font-size:11px;font-weight:600;padding:1px 7px;border-radius:3px;border:1px solid ${BORDER};margin:1px 2px;font-family:'DM Sans',Arial,sans-serif;white-space:nowrap;">${count} ${label}</span>`;
-  }
+  function userActivityTable(rows) {
+    if (rows.length === 0) return `<tr><td><p style="color:${TEXT_MUTED};font-style:italic;font-family:'DM Sans',Arial,sans-serif;font-size:13px;padding:8px 0;">No activity recorded.</p></td></tr>`;
 
-  const userBreakdownRows = userRows.map((u, i) => {
-    const name = u.id === '__unassigned__' ? '<em style="color:#9CA3AF;">Unassigned</em>' : `<strong>${ownerName(u.id)}</strong>`;
-    const pills = [
-      activityPill(u.dealsCreated, 'deal' + (u.dealsCreated !== 1 ? 's' : '')),
-      activityPill(u.stageChanges, 'stage change' + (u.stageChanges !== 1 ? 's' : '')),
-      activityPill(u.tasks, 'task' + (u.tasks !== 1 ? 's' : '')),
-      activityPill(u.calls, 'call' + (u.calls !== 1 ? 's' : '')),
-      activityPill(u.emails, 'email' + (u.emails !== 1 ? 's' : '')),
-      activityPill(u.meetings, 'meeting' + (u.meetings !== 1 ? 's' : '')),
-      activityPill(u.notes, 'note' + (u.notes !== 1 ? 's' : '')),
-      activityPill(u.contacts, 'contact' + (u.contacts !== 1 ? 's' : '')),
-      activityPill(u.companies, 'compan' + (u.companies !== 1 ? 'ies' : 'y')),
-    ].filter(Boolean).join('');
-    const dealValueStr = u.dealValue > 0 ? formatAmount(u.dealValue) : null;
-    return [
-      name,
-      `<span style="font-weight:700;color:${BLACK};font-family:'DM Sans',Arial,sans-serif;">${u.total}</span>`,
-      dealValueStr ? `<strong>${dealValueStr}</strong>` : '—',
-      `<div style="line-height:1.8;">${pills || '—'}</div>`,
+    const cols = [
+      { key: 'dealsCreated', label: 'Deals' },
+      { key: 'stageChanges', label: 'Stages' },
+      { key: 'tasks',        label: 'Tasks' },
+      { key: 'calls',        label: 'Calls' },
+      { key: 'emails',       label: 'Emails' },
+      { key: 'meetings',     label: 'Meetings' },
+      { key: 'notes',        label: 'Notes' },
+      { key: 'contacts',     label: 'Contacts' },
+      { key: 'companies',    label: 'Cos.' },
     ];
-  });
+
+    const thStyle = `padding:8px 6px;font-size:10px;font-weight:700;color:${TEXT_MUTED};text-align:center;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Sans',Arial,sans-serif;border-bottom:1px solid ${BORDER};white-space:nowrap;`;
+    const thNameStyle = `padding:8px 12px;font-size:10px;font-weight:700;color:${TEXT_MUTED};text-align:left;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Sans',Arial,sans-serif;border-bottom:1px solid ${BORDER};`;
+    const thTotalStyle = `padding:8px 6px;font-size:10px;font-weight:700;color:${BLACK};text-align:center;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Sans',Arial,sans-serif;border-bottom:1px solid ${BORDER};white-space:nowrap;`;
+
+    const headerRow = `
+      <tr style="background:${LIGHT_GRAY};">
+        <th style="${thNameStyle}">User</th>
+        ${cols.map((c) => `<th style="${thStyle}">${c.label}</th>`).join('')}
+        <th style="${thTotalStyle}">Total</th>
+      </tr>`;
+
+    const dataRows = rows.map((u, i) => {
+      const bg = i % 2 === 1 ? ROW_ALT : WHITE;
+      const name = u.id === '__unassigned__'
+        ? `<em style="color:#9CA3AF;font-family:'DM Sans',Arial,sans-serif;font-size:13px;">Unassigned</em>`
+        : `<span style="font-weight:600;color:${TEXT_MAIN};font-family:'DM Sans',Arial,sans-serif;font-size:13px;">${ownerName(u.id)}</span>`;
+      const dealValueStr = u.dealValue > 0 ? formatAmount(u.dealValue) : null;
+      const nameSub = dealValueStr
+        ? `<div style="font-size:11px;color:${TEXT_MUTED};margin-top:2px;font-family:'DM Sans',Arial,sans-serif;">${dealValueStr} deal value</div>`
+        : '';
+
+      const tdStyle = `padding:10px 6px;text-align:center;border-bottom:1px solid ${BORDER};font-family:'DM Sans',Arial,sans-serif;`;
+
+      const dataCells = cols.map((c) => {
+        const val = u[c.key];
+        const cell = val
+          ? `<span style="font-size:14px;font-weight:700;color:${BLACK};">${val}</span>`
+          : `<span style="font-size:13px;color:#D1D5DB;">—</span>`;
+        return `<td style="${tdStyle}">${cell}</td>`;
+      }).join('');
+
+      return `
+        <tr style="background:${bg};">
+          <td style="padding:10px 12px;border-bottom:1px solid ${BORDER};">${name}${nameSub}</td>
+          ${dataCells}
+          <td style="${tdStyle}"><span style="font-size:14px;font-weight:700;color:${RED};">${u.total}</span></td>
+        </tr>`;
+    }).join('');
+
+    return `
+      <tr>
+        <td style="padding-bottom:20px;">
+          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid ${BORDER};border-radius:8px;overflow:hidden;">
+            ${headerRow}
+            ${dataRows}
+          </table>
+        </td>
+      </tr>`;
+  }
 
   // Deals created table
   const dealsCreatedRows = dealsCreated.map((d) => {
@@ -471,10 +509,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
 
                 <!-- Activity by User -->
                 ${sectionHeader('Activity by User', userRows.length)}
-                ${activityTable(
-                  ['User', 'Total', 'Deal Value', 'Breakdown'],
-                  userBreakdownRows
-                )}
+                ${userActivityTable(userRows)}
 
                 <!-- Divider -->
                 <tr><td style="height:4px;border-bottom:1px solid ${BORDER};"></td></tr>
