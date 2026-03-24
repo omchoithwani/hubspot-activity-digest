@@ -550,6 +550,52 @@ async function fetchFormsSubmitted({ startMs, endMs }) {
 }
 
 /**
+ * Fetch contacts created from paid ads in the given window.
+ * Identifies ad-sourced contacts via hs_latest_source = PAID_SEARCH | PAID_SOCIAL.
+ * Returns contacts with ad attribution properties attached.
+ */
+async function fetchAdLeads({ startMs, endMs }) {
+  try {
+    const c = getClient();
+    // Each filterGroup is OR'd; filters within a group are AND'd
+    return await searchAll(
+      (params) => c.crm.contacts.searchApi.doSearch(params),
+      {
+        filterGroups: [
+          {
+            filters: [
+              { propertyName: 'createdate', operator: 'GTE', value: String(startMs) },
+              { propertyName: 'createdate', operator: 'LTE', value: String(endMs) },
+              { propertyName: 'hs_latest_source', operator: 'EQ', value: 'PAID_SEARCH' },
+            ],
+          },
+          {
+            filters: [
+              { propertyName: 'createdate', operator: 'GTE', value: String(startMs) },
+              { propertyName: 'createdate', operator: 'LTE', value: String(endMs) },
+              { propertyName: 'hs_latest_source', operator: 'EQ', value: 'PAID_SOCIAL' },
+            ],
+          },
+        ],
+        properties: [
+          'firstname', 'lastname', 'email', 'company', 'jobtitle', 'createdate',
+          'hs_latest_source',
+          'hs_latest_source_data_1',  // platform, e.g. "google", "facebook.com"
+          'hs_latest_source_data_2',  // campaign name
+          'hs_analytics_source',
+          'hs_analytics_source_data_1',
+          'hs_analytics_source_data_2',
+        ],
+        sorts: [{ propertyName: 'createdate', direction: 'DESCENDING' }],
+      }
+    );
+  } catch (err) {
+    console.error('Failed to fetch ad leads:', err.message);
+    throw err;
+  }
+}
+
+/**
  * Given an array of note IDs, return a map of noteId → { contacts: [name…], deals: [name…] }
  * using the CRM v4 batch associations API.
  */
@@ -641,4 +687,5 @@ module.exports = {
   fetchAccountInfo,
   getYesterdayRange,
   fetchFormsSubmitted,
+  fetchAdLeads,
 };

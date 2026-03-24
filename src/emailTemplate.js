@@ -157,6 +157,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
     companiesCreated = [],
     formsSubmitted = [],
     noteAssociations = {},
+    adLeads = [],
   } = data;
 
   function ownerName(id) {
@@ -181,7 +182,8 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
     notesAdded.length +
     contactsCreated.length +
     companiesCreated.length +
-    totalFormSubmissions;
+    totalFormSubmissions +
+    adLeads.length;
 
   const noActivity = totalActivities === 0;
 
@@ -202,6 +204,45 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
   const summaryRow1 = summaryItems.slice(0, 4);
   const summaryRow2 = summaryItems.slice(4, 8);
   const summaryRow3 = summaryItems.slice(8, 10);
+
+  // Normalise ad platform name from hs_latest_source_data_1
+  function platformLabel(raw) {
+    if (!raw) return 'Unknown';
+    const s = raw.toLowerCase().replace(/\.com$/, '');
+    if (s.includes('google'))    return 'Google';
+    if (s.includes('facebook'))  return 'Facebook';
+    if (s.includes('instagram')) return 'Instagram';
+    if (s.includes('linkedin'))  return 'LinkedIn';
+    if (s.includes('twitter') || s.includes('x.com')) return 'X / Twitter';
+    if (s.includes('tiktok'))    return 'TikTok';
+    if (s.includes('bing') || s.includes('microsoft')) return 'Bing';
+    if (s.includes('youtube'))   return 'YouTube';
+    // Capitalise whatever it is
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  }
+
+  // Build per-platform summary for ad leads
+  const adLeadsByPlatform = {};
+  for (const lead of adLeads) {
+    const platform = platformLabel(lead.properties?.hs_latest_source_data_1);
+    if (!adLeadsByPlatform[platform]) adLeadsByPlatform[platform] = 0;
+    adLeadsByPlatform[platform]++;
+  }
+
+  // Build ad leads table rows
+  const adLeadRows = adLeads.map((lead) => {
+    const name = [lead.properties?.firstname, lead.properties?.lastname].filter(Boolean).join(' ') || '—';
+    const platform = platformLabel(lead.properties?.hs_latest_source_data_1);
+    const campaign = lead.properties?.hs_latest_source_data_2 || lead.properties?.hs_analytics_source_data_2 || '—';
+    return [
+      `<strong>${name}</strong>`,
+      lead.properties?.email || '—',
+      lead.properties?.company || '—',
+      platform,
+      campaign,
+      formatDateOnly(lead.properties?.createdate),
+    ];
+  });
 
   // Build per-user activity breakdown
   const userActivity = {};
@@ -514,6 +555,29 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
                 <!-- Divider -->
                 <tr><td style="height:4px;border-bottom:1px solid ${BORDER};"></td></tr>
                 <tr><td style="height:4px;"></td></tr>
+
+                <!-- Ad Leads -->
+                ${adLeads.length > 0 ? `
+                ${sectionHeader('Ad Leads', adLeads.length)}
+                <tr>
+                  <td style="padding-bottom:14px;">
+                    <table cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        ${Object.entries(adLeadsByPlatform).map(([platform, count]) => `
+                        <td style="padding-right:8px;">
+                          <span style="display:inline-block;background:${LIGHT_GRAY};border:1px solid ${BORDER};border-radius:4px;padding:4px 12px;font-size:12px;font-family:'DM Sans',Arial,sans-serif;">
+                            <span style="font-weight:700;color:${BLACK};">${count}</span>
+                            <span style="color:${TEXT_MUTED};margin-left:4px;">${platform}</span>
+                          </span>
+                        </td>`).join('')}
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                ${activityTable(
+                  ['Name', 'Email', 'Company', 'Platform', 'Campaign', 'Created'],
+                  adLeadRows
+                )}` : ''}
 
                 <!-- Deals Created -->
                 ${dealsCreated.length > 0 ? `

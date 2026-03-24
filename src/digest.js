@@ -18,6 +18,7 @@ const {
   fetchAccountInfo,
   getYesterdayRange,
   fetchFormsSubmitted,
+  fetchAdLeads,
 } = require('./hubspot');
 
 const { sendEmail } = require('./mailer');
@@ -126,6 +127,9 @@ async function generateDigest(options = {}) {
   // Form submissions are sequential (one request per form), fetch after the parallel batch
   const formsSubmitted = await safelyFetch('Form Submissions', () => fetchFormsSubmitted(range), errors);
 
+  // Ad leads — contacts attributed to paid ads (PAID_SEARCH / PAID_SOCIAL)
+  const adLeads = await safelyFetch('Ad Leads', () => fetchAdLeads(range), errors);
+
   // Note associations (contact + deal names) — sequential after notes are known
   let noteAssociations = {};
   if (notesAdded.length > 0) {
@@ -150,6 +154,7 @@ async function generateDigest(options = {}) {
     companiesCreated,
     formsSubmitted,
     noteAssociations,
+    adLeads,
   };
 
   const totalFormSubmissions = formsSubmitted.reduce((s, f) => s + f.count, 0);
