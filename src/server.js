@@ -276,6 +276,21 @@ app.listen(PORT, () => {
   if (!process.env.SMTP_HOST) {
     console.warn('WARNING: SMTP_HOST is not set — email sending will fail');
   }
+
+  // Built-in daily scheduler — runs at 22:00 UTC (5 PM EST) every day
+  const cron = require('node-cron');
+  const { runAllTenants } = require('./digest');
+  const CRON_SCHEDULE = process.env.CRON_SCHEDULE || '0 22 * * *';
+  cron.schedule(CRON_SCHEDULE, async () => {
+    console.log(`[cron] Starting scheduled digest run at ${new Date().toISOString()}`);
+    try {
+      await runAllTenants();
+      console.log('[cron] Scheduled digest run complete.');
+    } catch (err) {
+      console.error('[cron] Scheduled digest run failed:', err.message);
+    }
+  });
+  console.log(`Digest scheduler: ${CRON_SCHEDULE} (UTC)`);
 });
 
 module.exports = app;

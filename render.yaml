@@ -1,5 +1,4 @@
 services:
-  # Web service — keeps the app alive and serves the setup UI
   - type: web
     name: hubspot-digest
     runtime: node
@@ -19,6 +18,8 @@ services:
         sync: false
       - key: TURSO_AUTH_TOKEN
         sync: false
+      - key: CRON_SCHEDULE
+        value: "0 22 * * *"   # 5 PM EST — change if needed
       - key: SMTP_HOST
         value: smtp.hostinger.com
       - key: SMTP_PORT
@@ -31,55 +32,3 @@ services:
         value: om.choithwani@aero-rev.com
       - key: FROM_NAME
         value: "HubSpot Digest"
-
-  # Cron job — runs the digest daily at 5:00 PM EST (22:00 UTC)
-  - type: cron
-    name: hubspot-digest-cron
-    runtime: node
-    region: oregon
-    schedule: "0 22 * * *"
-    buildCommand: npm install
-    startCommand: node src/digest.js
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: TURSO_DATABASE_URL
-        fromService:
-          type: web
-          name: hubspot-digest
-          envVarKey: TURSO_DATABASE_URL
-      - key: TURSO_AUTH_TOKEN
-        fromService:
-          type: web
-          name: hubspot-digest
-          envVarKey: TURSO_AUTH_TOKEN
-      - key: SMTP_HOST
-        fromService:
-          type: web
-          name: hubspot-digest
-          envVarKey: SMTP_HOST
-      - key: SMTP_PORT
-        fromService:
-          type: web
-          name: hubspot-digest
-          envVarKey: SMTP_PORT
-      - key: SMTP_USER
-        fromService:
-          type: web
-          name: hubspot-digest
-          envVarKey: SMTP_USER
-      - key: SMTP_PASS
-        fromService:
-          type: web
-          name: hubspot-digest
-          envVarKey: SMTP_PASS
-      - key: FROM_EMAIL
-        fromService:
-          type: web
-          name: hubspot-digest
-          envVarKey: FROM_EMAIL
-      - key: FROM_NAME
-        fromService:
-          type: web
-          name: hubspot-digest
-          envVarKey: FROM_NAME
