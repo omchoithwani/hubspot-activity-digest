@@ -15,6 +15,21 @@ let schemaReady = false;
 async function ensureSchema() {
   if (schemaReady) return;
   const db = getClient();
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      trial_ends_at TEXT NOT NULL,
+      subscription_status TEXT NOT NULL DEFAULT 'trial',
+      stripe_customer_id TEXT,
+      stripe_subscription_id TEXT,
+      stripe_price_id TEXT
+    )
+  `);
+
   await db.execute(`
     CREATE TABLE IF NOT EXISTS tenants (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -27,13 +42,88 @@ async function ensureSchema() {
       last_digest_status TEXT
     )
   `);
+
+  // Migration: add user_id column to existing tenants table (ignore if already exists)
+  try {
+    await db.execute('ALTER TABLE tenants ADD COLUMN user_id INTEGER REFERENCES users(id)');
+  } catch (_) {
+    // Column already exists — safe to ignore
+  }
+
   schemaReady = true;
 }
+
+// ─── User functions ──────────────────────────────────────────────────────────
+
+async function createUser({ email, passwordHash, trialEndsAt }) {
+  await ensureSchema();
+  const db = getClient();
+  const result = await db.execute({
+    sql: 'INSERT INTO users (email, password_hash, trial_ends_at) VALUES (?, ?, ?)',
+    args: [email.toLowerCase().trim(), passwordHash, trialEndsAt],
+  });
+  return result.lastInsertRowid;
+}
+
+async function getUserByEmail(email) {
+  await ensureSchema();
+  const db = getClient();
+  const result = await db.execute({
+    sql: 'SELECT * FROM users WHERE email = ?',
+    args: [email.toLowerCase().trim()],
+  });
+  return result.rows[0] || null;
+}
+
+async function getUserById(id) {
+  await ensureSchema();
+  const db = getClient();
+  const result = await db.execute({
+    sql: 'SELECT * FROM users WHERE id = ?',
+    args: [id],
+  });
+  return result.rows[0] || null;
+}
+
+async function getUserByStripeCustomer(stripeCustomerId) {
+  await ensureSchema();
+  const db = getClient();
+  const result = await db.execute({
+    sql: 'SELECT * FROM users WHERE stripe_customer_id = ?',
+    args: [stripeCustomerId],
+  });
+  return result.rows[0] || null;
+}
+
+async function updateUserSubscription(id, { stripeCustomerId, stripeSubscriptionId, status, stripePriceId }) {
+  const db = getClient();
+  await db.execute({
+    sql: `UPDATE users SET
+      stripe_customer_id = ?,
+      stripe_subscription_id = ?,
+      subscription_status = ?,
+      stripe_price_id = ?
+      WHERE id = ?`,
+    args: [stripeCustomerId, stripeSubscriptionId, status, stripePriceId, id],
+  });
+}
+
+// ─── Tenant functions ─────────────────────────────────────────────────────────
 
 async function getAllTenants() {
   await ensureSchema();
   const db = getClient();
   const result = await db.execute('SELECT * FROM tenants WHERE is_active = 1 ORDER BY created_at ASC');
+  return result.rows;
+}
+
+async function getAllTenantsForUser(userId) {
+  await ensureSchema();
+  const db = getClient();
+  const result = await db.execute({
+    sql: 'SELECT * FROM tenants WHERE is_active = 1 AND user_id = ? ORDER BY created_at ASC',
+    args: [userId],
+  });
   return result.rows;
 }
 
@@ -44,12 +134,22 @@ async function getTenant(id) {
   return result.rows[0] || null;
 }
 
-async function createTenant({ name, hubspotApiKey, recipientEmails }) {
+async function getTenantForUser(id, userId) {
   await ensureSchema();
   const db = getClient();
   const result = await db.execute({
-    sql: 'INSERT INTO tenants (name, hubspot_api_key, recipient_emails) VALUES (?, ?, ?)',
-    args: [name, hubspotApiKey, recipientEmails],
+    sql: 'SELECT * FROM tenants WHERE id = ? AND user_id = ?',
+    args: [id, userId],
+  });
+  return result.rows[0] || null;
+}
+
+async function createTenant({ name, hubspotApiKey, recipientEmails, userId = null }) {
+  await ensureSchema();
+  const db = getClient();
+  const result = await db.execute({
+    sql: 'INSERT INTO tenants (name, hubspot_api_key, recipient_emails, user_id) VALUES (?, ?, ?, ?)',
+    args: [name, hubspotApiKey, recipientEmails, userId],
   });
   return result.lastInsertRowid;
 }
@@ -68,8 +168,17 @@ async function updateTenantDigestStatus(id, status) {
 }
 
 module.exports = {
+  // Users
+  createUser,
+  getUserByEmail,
+  getUserById,
+  getUserByStripeCustomer,
+  updateUserSubscription,
+  // Tenants
   getAllTenants,
+  getAllTenantsForUser,
   getTenant,
+  getTenantForUser,
   createTenant,
   deleteTenant,
   updateTenantDigestStatus,
