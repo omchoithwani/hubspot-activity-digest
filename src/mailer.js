@@ -1,33 +1,27 @@
 'use strict';
 
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
-function createTransporter() {
-  const host = process.env.SMTP_HOST;
-  const port = parseInt(process.env.SMTP_PORT || '587', 10);
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-
-  if (!host || !user || !pass) {
-    throw new Error('SMTP_HOST, SMTP_USER, and SMTP_PASS environment variables are required');
+function createClient() {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    throw new Error('RESEND_API_KEY environment variable is required');
   }
-
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: { user, pass },
-  });
+  return new Resend(apiKey);
 }
 
 async function sendEmail({ toEmails, subject, htmlBody }) {
-  const transporter = createTransporter();
-  const fromEmail = process.env.FROM_EMAIL || process.env.SMTP_USER;
+  const resend = createClient();
+  const fromEmail = process.env.FROM_EMAIL;
   const fromName = process.env.FROM_NAME || 'HubSpot Digest';
 
+  if (!fromEmail) {
+    throw new Error('FROM_EMAIL environment variable is required');
+  }
+
   for (const to of toEmails) {
-    await transporter.sendMail({
-      from: `"${fromName}" <${fromEmail}>`,
+    await resend.emails.send({
+      from: `${fromName} <${fromEmail}>`,
       to,
       subject,
       html: htmlBody,
