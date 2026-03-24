@@ -67,7 +67,7 @@ async function safelyFetch(name, fetchFn, errors) {
  * Core digest generation function
  */
 async function generateDigest(options = {}) {
-  const { isTest = false, hubspotApiKey, recipients: recipientOverride } = options;
+  const { isTest = false, skipEmail = false, hubspotApiKey, recipients: recipientOverride } = options;
 
   // For multi-tenant: temporarily set the API key for this run
   const originalKey = process.env.HUBSPOT_ACCESS_TOKEN;
@@ -176,6 +176,14 @@ async function generateDigest(options = {}) {
 
   const subject = generateSubject(formatDate(now, accountTimezone).split(',')[0], totalActivities);
 
+  // If preview mode, skip email and return HTML directly
+  if (skipEmail) {
+    if (hubspotApiKey) process.env.HUBSPOT_ACCESS_TOKEN = originalKey;
+    console.log(`\n👁  Preview mode — skipping email send.`);
+    console.log('='.repeat(60) + '\n');
+    return { success: true, totalActivities, errors, htmlBody };
+  }
+
   // Determine recipients (priority: override > test env > env var)
   let recipients;
   if (recipientOverride) {
@@ -214,7 +222,7 @@ async function generateDigest(options = {}) {
   console.log(`   Total activities: ${totalActivities}`);
   console.log('='.repeat(60) + '\n');
 
-  return { success: true, totalActivities, errors };
+  return { success: true, totalActivities, errors, htmlBody };
 }
 
 /**
@@ -267,7 +275,7 @@ async function runAllTenants() {
 }
 
 // Export state and runner for use by server.js
-module.exports = { runDigest, runAllTenants, state };
+module.exports = { generateDigest, runDigest, runAllTenants, state };
 
 // Run directly when called as a script
 if (require.main === module) {

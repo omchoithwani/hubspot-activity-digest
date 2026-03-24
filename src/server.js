@@ -3,7 +3,7 @@
 require('dotenv').config();
 
 const express = require('express');
-const { state } = require('./digest');
+const { state, generateDigest } = require('./digest');
 const { getAllTenants, getTenant, createTenant, deleteTenant } = require('./db');
 
 const app = express();
@@ -55,8 +55,9 @@ function setupPage(tenants, flash) {
           <td class="mono small">${maskKey(t.hubspot_api_key)}</td>
           <td>${status}</td>
           <td class="small">${lastRun}</td>
-          <td>
-            <form method="POST" action="/setup/tenants/${t.id}/delete${tokenParam}" onsubmit="return confirm('Remove ${escHtml(t.name)}?')">
+          <td style="white-space:nowrap;">
+            <a href="/preview/${t.id}${tokenParam}" target="_blank" class="btn-preview">Preview</a>
+            <form method="POST" action="/setup/tenants/${t.id}/delete${tokenParam}" onsubmit="return confirm('Remove ${escHtml(t.name)}?')" style="display:inline;">
               <button type="submit" class="btn-remove">Remove</button>
             </form>
           </td>
@@ -67,7 +68,7 @@ function setupPage(tenants, flash) {
   const table = tenants && tenants.length > 0
     ? `<table>
         <thead><tr>
-          <th>Company</th><th>Recipients</th><th>API Key</th><th>Last Status</th><th>Last Run</th><th></th>
+          <th>Company</th><th>Recipients</th><th>API Key</th><th>Last Status</th><th>Last Run</th><th>Actions</th>
         </tr></thead>
         <tbody>${rows}</tbody>
        </table>`
@@ -107,6 +108,8 @@ function setupPage(tenants, flash) {
     .btn-primary:hover { background: #0077ed; }
     .btn-remove { background: none; border: 1px solid #e5e5ea; border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; color: #c0392b; }
     .btn-remove:hover { background: #fff0f0; border-color: #c0392b; }
+    .btn-preview { display: inline-block; background: none; border: 1px solid #d2d2d7; border-radius: 6px; padding: 5px 10px; font-size: 12px; color: #0071e3; text-decoration: none; margin-right: 6px; }
+    .btn-preview:hover { background: #f0f6ff; border-color: #0071e3; }
     table { width: 100%; border-collapse: collapse; font-size: 14px; }
     th { text-align: left; font-size: 12px; font-weight: 600; color: #6e6e73; border-bottom: 1px solid #e5e5ea; padding: 8px 12px; }
     td { padding: 12px; border-bottom: 1px solid #f2f2f7; vertical-align: top; }
@@ -257,6 +260,49 @@ app.post('/trigger', async (req, res) => {
   }
 });
 
+// Preview digest in browser (no email sent)
+app.get('/preview/:id', requireAdmin, async (req, res) => {
+  const tenant = await getTenant(Number(req.params.id));
+  if (!tenant) return res.status(404).send('Tenant not found.');
+
+  try {
+    const result = await generateDigest({
+      skipEmail: true,
+      hubspotApiKey: tenant.hubspot_api_key,
+    });
+    res.send(result.htmlBody);
+  } catch (err) {
+    res.status(500).send(`<pre>Error generating digest: ${escHtml(err.message)}</pre>`);
+  }
+});
+
+// Preview for single-tenant / env-var mode
+app.get('/preview', requireAdmin, async (req, res) => {
+  const tenants = await getAllTenants();
+  if (tenants.length === 1) {
+    // Auto-redirect to the single tenant's preview
+    const tokenParam = process.env.ADMIN_TOKEN ? `?token=${process.env.ADMIN_TOKEN}` : '';
+    return res.redirect(`/preview/${tenants[0].id}${tokenParam}`);
+  }
+  if (tenants.length > 1) {
+    const tokenParam = process.env.ADMIN_TOKEN ? `?token=${process.env.ADMIN_TOKEN}` : '';
+    const links = tenants.map((t) =>
+      `<li><a href="/preview/${t.id}${tokenParam}">${escHtml(t.name)}</a></li>`
+    ).join('');
+    return res.send(`<!DOCTYPE html><html><head><title>Preview Digest</title>
+      <style>body{font-family:system-ui;padding:40px;max-width:600px;margin:0 auto;}
+      li{margin:8px 0;}a{color:#0071e3;}</style></head>
+      <body><h2>Select a company to preview</h2><ul>${links}</ul></body></html>`);
+  }
+  // No DB tenants — fall back to env vars
+  try {
+    const result = await generateDigest({ skipEmail: true });
+    res.send(result.htmlBody);
+  } catch (err) {
+    res.status(500).send(`<pre>Error generating digest: ${escHtml(err.message)}</pre>`);
+  }
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
@@ -273,6 +319,7 @@ app.listen(PORT, () => {
   console.log(`Health check:   http://localhost:${PORT}/health`);
   console.log(`Setup page:     http://localhost:${PORT}/setup`);
   console.log(`Manual trigger: POST http://localhost:${PORT}/trigger`);
+  console.log(`Preview digest: GET  http://localhost:${PORT}/preview`);
   if (!process.env.SMTP_HOST) {
     console.warn('WARNING: SMTP_HOST is not set — email sending will fail');
   }
