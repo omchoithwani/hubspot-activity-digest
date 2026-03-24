@@ -104,28 +104,38 @@ async function generateDigest(options = {}) {
     safelyFetch('Deal Stages', fetchDealStages, errors),
   ]);
 
-  // Fetch activity types in two staggered batches to stay within HubSpot's
-  // per-second search rate limit (firing all 9 in parallel causes 429s).
+  // Fetch activity types sequentially in pairs to stay well within HubSpot's
+  // per-second search rate limit. Each pair shares one 300ms gap.
   console.log('\nFetching activities...');
-  const [dealsCreated, dealStageChanges, tasksCompleted, callsLogged] = await Promise.all([
+  const [dealsCreated, dealStageChanges] = await Promise.all([
     safelyFetch('Deals Created', () => fetchDealsCreated(range), errors),
     safelyFetch('Deal Stage Changes', () => fetchDealStageChanges(range), errors),
+  ]);
+
+  await new Promise((r) => setTimeout(r, 300));
+
+  const [tasksCompleted, callsLogged] = await Promise.all([
     safelyFetch('Tasks Completed', () => fetchTasksCompleted(range), errors),
     safelyFetch('Calls Logged', () => fetchCallsLogged(range), errors),
   ]);
 
-  await new Promise((r) => setTimeout(r, 500));
+  await new Promise((r) => setTimeout(r, 300));
 
-  const [emailsSent, meetingsBooked, notesAdded] = await Promise.all([
+  const [emailsSent, meetingsBooked] = await Promise.all([
     safelyFetch('Emails Sent', () => fetchEmailsSent(range), errors),
     safelyFetch('Meetings Booked', () => fetchMeetingsBooked(range), errors),
-    safelyFetch('Notes Added', () => fetchNotesAdded(range), errors),
   ]);
 
-  await new Promise((r) => setTimeout(r, 500));
+  await new Promise((r) => setTimeout(r, 300));
 
-  const [contactsCreated, companiesCreated] = await Promise.all([
+  const [notesAdded, contactsCreated] = await Promise.all([
+    safelyFetch('Notes Added', () => fetchNotesAdded(range), errors),
     safelyFetch('Contacts Created', () => fetchContactsCreated(range), errors),
+  ]);
+
+  await new Promise((r) => setTimeout(r, 300));
+
+  const [companiesCreated] = await Promise.all([
     safelyFetch('Companies Created', () => fetchCompaniesCreated(range), errors),
   ]);
 

@@ -323,7 +323,8 @@ function billingPage(user, flash, expired) {
     cancelled: '<span class="badge-err">Cancelled</span>',
   }[status] || `<span class="badge-pending">${escHtml(status)}</span>`;
 
-  const planCards = Object.entries(PLANS)
+  const isSubscribed = status === 'active' || status === 'lifetime';
+  const planCards = isSubscribed ? '' : Object.entries(PLANS)
     .map(([key, plan]) => {
       const badge = plan.badge ? `<span style="background:#0071e3;color:#fff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;margin-left:8px;">${escHtml(plan.badge)}</span>` : '';
       return `
@@ -363,12 +364,13 @@ function billingPage(user, flash, expired) {
 
     ${portalSection}
 
+    ${!isSubscribed ? `
     <div class="card">
       <h2>Choose a Plan</h2>
       <div style="display:flex;gap:16px;flex-wrap:wrap;">
         ${planCards}
       </div>
-    </div>
+    </div>` : ''}
   </div>
 </body>
 </html>`;
