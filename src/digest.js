@@ -15,11 +15,12 @@ const {
   fetchNoteAssociations,
   fetchContactsCreated,
   fetchCompaniesCreated,
-  sendEmail,
   fetchAccountInfo,
   getYesterdayRange,
   fetchFormsSubmitted,
 } = require('./hubspot');
+
+const { sendEmail } = require('./mailer');
 
 const { generateEmailHtml, generateSubject } = require('./emailTemplate');
 
@@ -66,7 +67,11 @@ async function safelyFetch(name, fetchFn, errors) {
  * Core digest generation function
  */
 async function generateDigest(options = {}) {
-  const { isTest = false } = options;
+  const { isTest = false, hubspotApiKey, recipients: recipientOverride } = options;
+
+  // For multi-tenant: temporarily set the API key for this run
+  const originalKey = process.env.HUBSPOT_ACCESS_TOKEN;
+  if (hubspotApiKey) process.env.HUBSPOT_ACCESS_TOKEN = hubspotApiKey;
 
   console.log(`\n${'='.repeat(60)}`);
   console.log(`HubSpot Activity Digest — ${new Date().toISOString()}`);
@@ -171,9 +176,14 @@ async function generateDigest(options = {}) {
 
   const subject = generateSubject(formatDate(now, accountTimezone).split(',')[0], totalActivities);
 
-  // Determine recipients
+  // Determine recipients (priority: override > test env > env var)
   let recipients;
-  if (isTest) {
+  if (recipientOverride) {
+    recipients = Array.isArray(recipientOverride)
+      ? recipientOverride
+      : recipientOverride.split(',').map((e) => e.trim()).filter(Boolean);
+    console.log(`\nSending to ${recipients.length} recipient(s): ${recipients.join(', ')}`);
+  } else if (isTest) {
     const testEmail = process.env.TEST_RECIPIENT_EMAIL || process.env.RECIPIENT_EMAILS;
     if (!testEmail) {
       throw new Error('TEST_RECIPIENT_EMAIL or RECIPIENT_EMAILS must be set for test mode');
@@ -191,11 +201,12 @@ async function generateDigest(options = {}) {
 
   // Send email
   console.log('Sending email...');
-  await sendEmail({
-    toEmails: recipients,
-    subject,
-    htmlBody,
-  });
+  try {
+    await sendEmail({ toEmails: recipients, subject, htmlBody });
+  } finally {
+    // Restore original API key after this tenant's run
+    if (hubspotApiKey) process.env.HUBSPOT_ACCESS_TOKEN = originalKey;
+  }
 
   console.log(`\n✅ Digest sent successfully!`);
   console.log(`   Subject: ${subject}`);
@@ -225,14 +236,46 @@ async function runDigest(options = {}) {
   }
 }
 
+/**
+ * Run the digest for every active tenant in the database.
+ * Falls back to env vars if no tenants are configured.
+ */
+async function runAllTenants() {
+  const { getAllTenants, updateTenantDigestStatus } = require('./db');
+  const tenants = getAllTenants();
+
+  if (tenants.length === 0) {
+    console.log('No tenants in database — falling back to environment variables.');
+    return runDigest({});
+  }
+
+  console.log(`Running digest for ${tenants.length} tenant(s)...`);
+  for (const tenant of tenants) {
+    console.log(`\n${'─'.repeat(60)}`);
+    console.log(`Tenant: ${tenant.name}`);
+    try {
+      await runDigest({
+        hubspotApiKey: tenant.hubspot_api_key,
+        recipients: tenant.recipient_emails,
+      });
+      updateTenantDigestStatus(tenant.id, 'success');
+    } catch (err) {
+      console.error(`Digest failed for ${tenant.name}:`, err.message);
+      updateTenantDigestStatus(tenant.id, `error: ${err.message.slice(0, 200)}`);
+    }
+  }
+}
+
 // Export state and runner for use by server.js
-module.exports = { runDigest, state };
+module.exports = { runDigest, runAllTenants, state };
 
 // Run directly when called as a script
 if (require.main === module) {
   const isTest = process.argv.includes('--test');
 
-  runDigest({ isTest })
+  // In test mode use env vars; otherwise run all tenants
+  const runner = isTest ? runDigest({ isTest: true }) : runAllTenants();
+  runner
     .then(() => process.exit(0))
     .catch((err) => {
       console.error('Fatal error:', err.message);

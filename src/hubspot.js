@@ -625,46 +625,6 @@ async function fetchNoteAssociations(noteIds) {
   return assocMap;
 }
 
-/**
- * Send email via HubSpot Single Send API (transactional)
- */
-async function sendEmail({ toEmails, subject, htmlBody }) {
-  const c = getClient();
-
-  // HubSpot transactional email requires a valid from address configured in HubSpot
-  // We use the Marketing Email API for single sends
-  const fromEmail = process.env.FROM_EMAIL || 'digest@aerorev.com';
-  const fromName = process.env.FROM_NAME || 'AeroRev HubSpot Digest';
-
-  // Use HubSpot's Single Send API (requires transactional email access)
-  for (const toEmail of toEmails) {
-    await withRetry(() =>
-      c.apiRequest({
-        method: 'POST',
-        path: '/marketing/v3/transactional/single-email/send',
-        body: {
-          emailId: 0, // 0 = custom HTML email
-          message: {
-            to: toEmail,
-            from: fromEmail,
-            replyTo: fromEmail,
-            cc: [],
-            bcc: [],
-            sendId: `digest-${Date.now()}-${toEmail.replace(/[^a-z0-9]/gi, '')}`,
-          },
-          customProperties: {},
-          contactProperties: {},
-          content: {
-            subject,
-            html: htmlBody,
-          },
-        },
-      })
-    );
-    console.log(`Email sent to ${toEmail}`);
-  }
-}
-
 module.exports = {
   fetchOwners,
   fetchDealStages,
@@ -678,7 +638,6 @@ module.exports = {
   fetchNoteAssociations,
   fetchContactsCreated,
   fetchCompaniesCreated,
-  sendEmail,
   fetchAccountInfo,
   getYesterdayRange,
   fetchFormsSubmitted,

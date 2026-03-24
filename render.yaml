@@ -1,5 +1,5 @@
 services:
-  # Web service - keeps the app alive and provides health check endpoint
+  # Web service — keeps the app alive and serves the setup UI
   - type: web
     name: hubspot-digest
     runtime: node
@@ -8,26 +8,34 @@ services:
     buildCommand: npm install
     startCommand: node src/server.js
     healthCheckPath: /health
+    disk:
+      name: digest-data
+      mountPath: /data
+      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
-      - key: HUBSPOT_ACCESS_TOKEN
-        sync: false   # Set this in the Render dashboard
-      - key: RECIPIENT_EMAILS
-        sync: false   # Comma-separated email addresses
-      - key: FROM_EMAIL
-        sync: false   # Optional: sender email address
-      - key: FROM_NAME
-        sync: false   # Optional: sender display name
+      - key: DB_PATH
+        value: /data/config.db
+      - key: ADMIN_TOKEN
+        sync: false   # Protect the /setup page — set a strong random token
       - key: TRIGGER_TOKEN
-        sync: false   # Optional: token to protect /trigger endpoint
-      - key: TEST_RECIPIENT_EMAIL
-        sync: false   # Optional: override recipient for test sends
+        sync: false   # Optional: protect the POST /trigger endpoint
+      # SMTP settings — all tenants' emails are sent through this server
+      - key: SMTP_HOST
+        sync: false   # e.g. smtp.gmail.com / smtp.sendgrid.net / smtp.resend.com
+      - key: SMTP_PORT
+        value: "587"  # 587 for TLS (STARTTLS), 465 for SSL
+      - key: SMTP_USER
+        sync: false   # e.g. apikey (SendGrid) or your email address (Gmail)
+      - key: SMTP_PASS
+        sync: false   # SMTP password or API key
+      - key: FROM_EMAIL
+        sync: false   # Sender address shown in the email (must be verified with your SMTP provider)
+      - key: FROM_NAME
+        value: "HubSpot Digest"
 
-  # Cron job - runs the digest daily at 5:00 PM EST (22:00 UTC)
-  # Note: During EDT (March-November), 5 PM EDT = 21:00 UTC
-  # Adjust schedule to "0 21 * * *" during EDT if needed,
-  # or set to 22:00 UTC (10 PM UTC = 5 PM EST) which works all year in EST.
+  # Cron job — runs the digest daily at 5:00 PM EST (22:00 UTC)
   - type: cron
     name: hubspot-digest-cron
     runtime: node
@@ -37,14 +45,26 @@ services:
     buildCommand: npm install
     startCommand: node src/digest.js
     envVars:
+      - key: DB_PATH
+        value: /data/config.db
+      - key: NODE_ENV
+        value: production
       - fromService:
           type: web
           name: hubspot-digest
-          envVarKey: HUBSPOT_ACCESS_TOKEN
+          envVarKey: SMTP_HOST
       - fromService:
           type: web
           name: hubspot-digest
-          envVarKey: RECIPIENT_EMAILS
+          envVarKey: SMTP_PORT
+      - fromService:
+          type: web
+          name: hubspot-digest
+          envVarKey: SMTP_USER
+      - fromService:
+          type: web
+          name: hubspot-digest
+          envVarKey: SMTP_PASS
       - fromService:
           type: web
           name: hubspot-digest
@@ -53,7 +73,3 @@ services:
           type: web
           name: hubspot-digest
           envVarKey: FROM_NAME
-      - fromService:
-          type: web
-          name: hubspot-digest
-          envVarKey: NODE_ENV
