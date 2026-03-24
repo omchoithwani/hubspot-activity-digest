@@ -86,7 +86,7 @@ function getYesterdayRange(ianaTimezone) {
   const now = new Date();
   const todayStr = now.toLocaleDateString('en-CA', { timeZone: ianaTimezone }); // YYYY-MM-DD
   const [y, m, d] = todayStr.split('-').map(Number);
-  const yesterdayStr = new Date(Date.UTC(y, m - 1, d - 1))
+  const yesterdayStr = new Date(Date.UTC(y, m - 1, d - 1, 12, 0, 0))
     .toLocaleDateString('en-CA', { timeZone: ianaTimezone });
   return {
     startMs: midnightUtcMs(yesterdayStr, ianaTimezone),
