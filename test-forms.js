@@ -22,21 +22,22 @@ async function run() {
   let forms = [];
   try {
     const formsResp = await c.apiRequest({ method: 'GET', path: '/marketing/v3/forms', qs: { limit: 200 } });
+    console.log('v3 raw response:', JSON.stringify(formsResp).slice(0, 500));
     forms = formsResp.results || [];
     console.log(`v3 forms API: ${forms.length} form(s)`);
   } catch (e) {
-    console.log(`v3 forms API failed: ${e.message}`);
+    console.log(`v3 forms API failed: ${e.message}`, e.body || '');
   }
 
   if (forms.length === 0) {
     try {
       const formsResp2 = await c.apiRequest({ method: 'GET', path: '/forms/v2/forms' });
+      console.log('v2 raw response (first 500):', JSON.stringify(formsResp2).slice(0, 500));
       forms = Array.isArray(formsResp2) ? formsResp2 : (formsResp2.results || []);
       console.log(`v2 forms API: ${forms.length} form(s)`);
-      // v2 uses guid instead of id
       forms = forms.map(f => ({ ...f, id: f.id || f.guid }));
     } catch (e) {
-      console.log(`v2 forms API failed: ${e.message}`);
+      console.log(`v2 forms API failed: ${e.message}`, e.body || '');
     }
   }
 
