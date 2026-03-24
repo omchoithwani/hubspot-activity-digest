@@ -483,9 +483,10 @@ async function fetchSubmissionsForForm(formId, startMs, endMs) {
     const qs = { limit: 50 };
     if (after) qs.after = String(after);
 
-    const resp = await withRetry(() =>
-      c.apiRequest({ method: 'GET', path: `/form-integrations/v1/submissions/forms/${formId}`, qs })
-    );
+    const resp = await withRetry(async () => {
+      const r = await c.apiRequest({ method: 'GET', path: `/form-integrations/v1/submissions/forms/${formId}`, qs });
+      return r?.json ? r.json() : r;
+    });
 
     const page = resp.results || [];
 
@@ -530,11 +531,10 @@ async function fetchFormsSubmitted({ startMs, endMs }) {
     const c = getClient();
 
     // List all forms in the portal
-    console.log('[forms] calling /marketing/v3/forms...');
-    const formsResp = await withRetry(() =>
-      c.apiRequest({ method: 'GET', path: '/marketing/v3/forms', qs: { limit: 200 } })
-    );
-    console.log('[forms] raw response keys:', formsResp ? Object.keys(formsResp) : formsResp);
+    const formsResp = await withRetry(async () => {
+      const r = await c.apiRequest({ method: 'GET', path: '/marketing/v3/forms', qs: { limit: 200 } });
+      return r?.json ? r.json() : r;
+    });
     const forms = formsResp?.results || [];
     console.log(`[forms] found ${forms.length} forms in portal`);
 
