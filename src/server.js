@@ -477,8 +477,13 @@ app.post('/dashboard/tenants/:id/send', requireAuth, loadUser, requireSubscripti
   res.redirect(`/dashboard?flash=${sendingFlash}`);
 
   const { runDigest } = require('./digest');
+  const appUrl = (process.env.APP_URL || '').replace(/\/$/, '');
   Promise.resolve()
-    .then(() => runDigest({ hubspotApiKey: tenant.hubspot_api_key, recipients: tenant.recipient_emails }))
+    .then(() => runDigest({
+      hubspotApiKey: tenant.hubspot_api_key,
+      recipients: tenant.recipient_emails,
+      previewUrl: appUrl ? `${appUrl}/dashboard/preview/${tenant.id}` : undefined,
+    }))
     .then(() => updateTenantDigestStatus(tenant.id, 'success'))
     .then(() => console.log(`[send-now] Digest sent for tenant: ${tenant.name}`))
     .catch((err) => {
@@ -668,8 +673,13 @@ app.post('/setup/tenants/:id/send', requireAdmin, async (req, res) => {
 
   const { runDigest } = require('./digest');
   const { updateTenantDigestStatus: updateStatus } = require('./db');
+  const appUrlAdmin = (process.env.APP_URL || '').replace(/\/$/, '');
   Promise.resolve()
-    .then(() => runDigest({ hubspotApiKey: tenant.hubspot_api_key, recipients: tenant.recipient_emails }))
+    .then(() => runDigest({
+      hubspotApiKey: tenant.hubspot_api_key,
+      recipients: tenant.recipient_emails,
+      previewUrl: appUrlAdmin ? `${appUrlAdmin}/dashboard/preview/${tenant.id}` : undefined,
+    }))
     .then(() => updateStatus(tenant.id, 'success'))
     .then(() => console.log(`[send-now] Digest sent for tenant: ${tenant.name}`))
     .catch((err) => {
