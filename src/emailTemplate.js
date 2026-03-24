@@ -203,6 +203,79 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
   const summaryRow2 = summaryItems.slice(4, 8);
   const summaryRow3 = summaryItems.slice(8, 10);
 
+  // Build per-user activity breakdown
+  const userActivity = {};
+
+  function userEntry(id) {
+    const key = id || '__unassigned__';
+    if (!userActivity[key]) {
+      userActivity[key] = {
+        id: key,
+        dealsCreated: 0,
+        dealValue: 0,
+        stageChanges: 0,
+        tasks: 0,
+        calls: 0,
+        emails: 0,
+        meetings: 0,
+        notes: 0,
+        contacts: 0,
+        companies: 0,
+      };
+    }
+    return userActivity[key];
+  }
+
+  dealsCreated.forEach((d) => {
+    const u = userEntry(d.properties?.hubspot_owner_id);
+    u.dealsCreated++;
+    const amt = parseFloat(d.properties?.amount);
+    if (!isNaN(amt)) u.dealValue += amt;
+  });
+  dealStageChanges.forEach((d) => { userEntry(d.hubspot_owner_id).stageChanges++; });
+  tasksCompleted.forEach((t) => { userEntry(t.properties?.hubspot_owner_id).tasks++; });
+  callsLogged.forEach((c) => { userEntry(c.properties?.hubspot_owner_id).calls++; });
+  emailsSent.forEach((e) => { userEntry(e.properties?.hubspot_owner_id).emails++; });
+  meetingsBooked.forEach((m) => { userEntry(m.properties?.hubspot_owner_id).meetings++; });
+  notesAdded.forEach((n) => { userEntry(n.properties?.hubspot_owner_id).notes++; });
+  contactsCreated.forEach((c) => { userEntry(c.properties?.hubspot_owner_id).contacts++; });
+  companiesCreated.forEach((c) => { userEntry(c.properties?.hubspot_owner_id).companies++; });
+
+  const userRows = Object.values(userActivity)
+    .map((u) => {
+      const total = u.dealsCreated + u.stageChanges + u.tasks + u.calls +
+                    u.emails + u.meetings + u.notes + u.contacts + u.companies;
+      return { ...u, total };
+    })
+    .sort((a, b) => b.total - a.total);
+
+  function activityPill(count, label) {
+    if (!count) return '';
+    return `<span style="display:inline-block;background:${LIGHT_GRAY};color:${TEXT_MAIN};font-size:11px;font-weight:600;padding:1px 7px;border-radius:3px;border:1px solid ${BORDER};margin:1px 2px;font-family:'DM Sans',Arial,sans-serif;white-space:nowrap;">${count} ${label}</span>`;
+  }
+
+  const userBreakdownRows = userRows.map((u, i) => {
+    const name = u.id === '__unassigned__' ? '<em style="color:#9CA3AF;">Unassigned</em>' : `<strong>${ownerName(u.id)}</strong>`;
+    const pills = [
+      activityPill(u.dealsCreated, 'deal' + (u.dealsCreated !== 1 ? 's' : '')),
+      activityPill(u.stageChanges, 'stage change' + (u.stageChanges !== 1 ? 's' : '')),
+      activityPill(u.tasks, 'task' + (u.tasks !== 1 ? 's' : '')),
+      activityPill(u.calls, 'call' + (u.calls !== 1 ? 's' : '')),
+      activityPill(u.emails, 'email' + (u.emails !== 1 ? 's' : '')),
+      activityPill(u.meetings, 'meeting' + (u.meetings !== 1 ? 's' : '')),
+      activityPill(u.notes, 'note' + (u.notes !== 1 ? 's' : '')),
+      activityPill(u.contacts, 'contact' + (u.contacts !== 1 ? 's' : '')),
+      activityPill(u.companies, 'compan' + (u.companies !== 1 ? 'ies' : 'y')),
+    ].filter(Boolean).join('');
+    const dealValueStr = u.dealValue > 0 ? formatAmount(u.dealValue) : null;
+    return [
+      name,
+      `<span style="font-weight:700;color:${BLACK};font-family:'DM Sans',Arial,sans-serif;">${u.total}</span>`,
+      dealValueStr ? `<strong>${dealValueStr}</strong>` : '—',
+      `<div style="line-height:1.8;">${pills || '—'}</div>`,
+    ];
+  });
+
   // Deals created table
   const dealsCreatedRows = dealsCreated.map((d) => {
     const amount = formatAmount(d.properties?.amount);
@@ -394,6 +467,17 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
 
                 <!-- Divider -->
                 <tr><td style="height:24px;border-bottom:1px solid ${BORDER};"></td></tr>
+                <tr><td style="height:4px;"></td></tr>
+
+                <!-- Activity by User -->
+                ${sectionHeader('Activity by User', userRows.length)}
+                ${activityTable(
+                  ['User', 'Total', 'Deal Value', 'Breakdown'],
+                  userBreakdownRows
+                )}
+
+                <!-- Divider -->
+                <tr><td style="height:4px;border-bottom:1px solid ${BORDER};"></td></tr>
                 <tr><td style="height:4px;"></td></tr>
 
                 <!-- Deals Created -->
