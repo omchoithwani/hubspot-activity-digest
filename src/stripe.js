@@ -8,13 +8,12 @@ function getStripe() {
   return new Stripe(key);
 }
 
-// Plan definitions — price IDs come from env vars, display prices are configurable
+// Plan definitions — price IDs come from env vars
 const PLANS = {
   monthly: {
     priceId: () => process.env.STRIPE_PRICE_MONTHLY,
     mode: 'subscription',
     label: 'Monthly',
-    displayPrice: process.env.PRICE_MONTHLY_DISPLAY || '$29',
     period: '/ month',
     description: 'Billed monthly, cancel anytime',
   },
@@ -22,7 +21,6 @@ const PLANS = {
     priceId: () => process.env.STRIPE_PRICE_ANNUAL,
     mode: 'subscription',
     label: 'Annual',
-    displayPrice: process.env.PRICE_ANNUAL_DISPLAY || '$249',
     period: '/ year',
     description: 'Save ~28% vs monthly',
     badge: 'Best Value',
@@ -31,11 +29,45 @@ const PLANS = {
     priceId: () => process.env.STRIPE_PRICE_LIFETIME,
     mode: 'payment',
     label: 'Lifetime',
-    displayPrice: process.env.PRICE_LIFETIME_DISPLAY || '$499',
     period: 'one-time',
     description: 'Pay once, use forever',
   },
 };
+
+/**
+ * Fetch live prices from Stripe for each configured plan.
+ * Returns a map of planKey -> formatted price string (e.g. "$29").
+ * Falls back to "—" for any plan whose price can't be fetched.
+ */
+async function fetchLivePrices() {
+  try {
+    const stripe = getStripe();
+    const priceMap = {};
+    await Promise.all(
+      Object.entries(PLANS).map(async ([key, plan]) => {
+        const priceId = plan.priceId();
+        if (!priceId) { priceMap[key] = '—'; return; }
+        try {
+          const price = await stripe.prices.retrieve(priceId);
+          const amount = price.unit_amount;
+          const currency = (price.currency || 'usd').toUpperCase();
+          if (amount == null) { priceMap[key] = '—'; return; }
+          const formatted = new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency,
+            maximumFractionDigits: 0,
+          }).format(amount / 100);
+          priceMap[key] = formatted;
+        } catch {
+          priceMap[key] = '—';
+        }
+      })
+    );
+    return priceMap;
+  } catch {
+    return Object.fromEntries(Object.keys(PLANS).map((k) => [k, '—']));
+  }
+}
 
 async function createCheckoutSession({ user, plan, baseUrl }) {
   const stripe = getStripe();
@@ -124,4 +156,4 @@ async function handleWebhookEvent(rawBody, signature) {
   return { handled: false, event: event.type };
 }
 
-module.exports = { PLANS, createCheckoutSession, createPortalSession, handleWebhookEvent };
+module.exports = { PLANS, fetchLivePrices, createCheckoutSession, createPortalSession, handleWebhookEvent };

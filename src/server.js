@@ -25,7 +25,7 @@ const {
   clearSessionCookie,
   trialDaysLeft,
 } = require('./auth');
-const { PLANS, createCheckoutSession, createPortalSession, handleWebhookEvent } = require('./stripe');
+const { PLANS, fetchLivePrices, createCheckoutSession, createPortalSession, handleWebhookEvent } = require('./stripe');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -304,7 +304,7 @@ function dashboardPage(user, tenants, flash) {
 
 // ─── Billing page ─────────────────────────────────────────────────────────────
 
-function billingPage(user, flash, expired) {
+function billingPage(user, flash, expired, livePrices = {}) {
   const daysLeft = trialDaysLeft(user);
   const status = user.subscription_status;
 
@@ -326,11 +326,12 @@ function billingPage(user, flash, expired) {
   const isSubscribed = status === 'active' || status === 'lifetime';
   const planCards = isSubscribed ? '' : Object.entries(PLANS)
     .map(([key, plan]) => {
+      const displayPrice = livePrices[key] || '—';
       const badge = plan.badge ? `<span style="background:#0071e3;color:#fff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;margin-left:8px;">${escHtml(plan.badge)}</span>` : '';
       return `
         <div style="border:1px solid #e5e5ea;border-radius:10px;padding:20px;flex:1;min-width:200px;">
           <div style="font-size:15px;font-weight:600;margin-bottom:4px;">${escHtml(plan.label)}${badge}</div>
-          <div style="font-size:28px;font-weight:700;margin:8px 0;">${escHtml(plan.displayPrice)} <span style="font-size:14px;font-weight:400;color:#6e6e73;">${escHtml(plan.period)}</span></div>
+          <div style="font-size:28px;font-weight:700;margin:8px 0;">${escHtml(displayPrice)} <span style="font-size:14px;font-weight:400;color:#6e6e73;">${escHtml(plan.period)}</span></div>
           <div style="font-size:13px;color:#6e6e73;margin-bottom:20px;">${escHtml(plan.description)}</div>
           <form method="POST" action="/billing/checkout">
             <input type="hidden" name="plan" value="${escHtml(key)}">
@@ -508,9 +509,10 @@ app.get('/dashboard/preview/:id', requireAuth, loadUser, requireSubscription, as
 
 // ─── Billing routes ───────────────────────────────────────────────────────────
 
-app.get('/billing', requireAuth, loadUser, (req, res) => {
+app.get('/billing', requireAuth, loadUser, async (req, res) => {
   const flash = req.query.flash ? decodeURIComponent(req.query.flash) : null;
-  res.send(billingPage(req.dbUser, flash, req.query.expired === '1'));
+  const livePrices = await fetchLivePrices();
+  res.send(billingPage(req.dbUser, flash, req.query.expired === '1', livePrices));
 });
 
 app.post('/billing/checkout', requireAuth, loadUser, async (req, res) => {
