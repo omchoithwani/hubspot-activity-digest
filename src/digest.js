@@ -116,10 +116,15 @@ async function generateDigest(options = {}) {
 
   await new Promise((r) => setTimeout(r, 500));
 
-  const [emailsSent, meetingsBooked, notesAdded, contactsCreated, companiesCreated] = await Promise.all([
+  const [emailsSent, meetingsBooked, notesAdded] = await Promise.all([
     safelyFetch('Emails Sent', () => fetchEmailsSent(range), errors),
     safelyFetch('Meetings Booked', () => fetchMeetingsBooked(range), errors),
     safelyFetch('Notes Added', () => fetchNotesAdded(range), errors),
+  ]);
+
+  await new Promise((r) => setTimeout(r, 500));
+
+  const [contactsCreated, companiesCreated] = await Promise.all([
     safelyFetch('Contacts Created', () => fetchContactsCreated(range), errors),
     safelyFetch('Companies Created', () => fetchCompaniesCreated(range), errors),
   ]);
