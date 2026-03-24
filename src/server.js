@@ -78,7 +78,7 @@ function setupPage(tenants, flash) {
     : '<p class="empty">No companies added yet. Add your first one below.</p>';
 
   const flashHtml = flash
-    ? `<div class="flash ${flash.startsWith('✓') ? 'flash-ok' : 'flash-err'}">${escHtml(flash)}</div>`
+    ? `<div class="flash ${flash.startsWith('✓') || flash.startsWith('Sending') ? 'flash-ok' : 'flash-err'}">${escHtml(flash)}</div>`
     : '';
 
   return `<!DOCTYPE html>
@@ -212,7 +212,8 @@ app.get('/health', (req, res) => {
 // Setup page
 app.get('/setup', requireAdmin, async (req, res) => {
   const tenants = await getAllTenants();
-  res.send(setupPage(tenants, null));
+  const flash = req.query.flash ? decodeURIComponent(req.query.flash) : null;
+  res.send(setupPage(tenants, flash));
 });
 
 // Add tenant
@@ -251,30 +252,27 @@ app.post('/setup/tenants/:id/send', requireAdmin, async (req, res) => {
   const tokenParam = process.env.ADMIN_TOKEN ? `?token=${process.env.ADMIN_TOKEN}` : '';
   const tenant = await getTenant(Number(req.params.id));
   if (!tenant) {
-    const tenants = await getAllTenants();
-    return res.send(setupPage(tenants, 'Tenant not found.'));
+    return res.redirect(`/setup${tokenParam}`);
   }
 
-  // Respond immediately so the proxy doesn't time out
-  const tenants = await getAllTenants();
-  res.send(setupPage(tenants, `⏳ Sending digest for ${tenant.name}… refresh the page in a moment to see the result.`));
+  // Redirect immediately — no getAllTenants() call, no rendering delay
+  const sendingFlash = encodeURIComponent(`Sending digest for ${tenant.name}... check Last Status in a moment.`);
+  res.redirect(`/setup${tokenParam}${tokenParam ? '&' : '?'}flash=${sendingFlash}`);
 
-  // Run in background
+  // Run in background — .catch() ensures no unhandled rejection kills the process
   const { runDigest } = require('./digest');
   const { updateTenantDigestStatus } = require('./db');
-  (async () => {
-    try {
-      await runDigest({
-        hubspotApiKey: tenant.hubspot_api_key,
-        recipients: tenant.recipient_emails,
-      });
-      await updateTenantDigestStatus(tenant.id, 'success');
-      console.log(`[send-now] Digest sent for tenant: ${tenant.name}`);
-    } catch (err) {
-      await updateTenantDigestStatus(tenant.id, `error: ${err.message.slice(0, 200)}`);
+  Promise.resolve()
+    .then(() => runDigest({
+      hubspotApiKey: tenant.hubspot_api_key,
+      recipients: tenant.recipient_emails,
+    }))
+    .then(() => updateTenantDigestStatus(tenant.id, 'success'))
+    .then(() => console.log(`[send-now] Digest sent for tenant: ${tenant.name}`))
+    .catch((err) => {
       console.error(`[send-now] Digest failed for ${tenant.name}:`, err.message);
-    }
-  })();
+      updateTenantDigestStatus(tenant.id, `error: ${err.message.slice(0, 200)}`).catch(() => {});
+    });
 });
 
 // Manual trigger endpoint (protected by TRIGGER_TOKEN)
