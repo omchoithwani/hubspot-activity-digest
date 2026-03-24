@@ -68,7 +68,7 @@ async function safelyFetch(name, fetchFn, errors) {
  * Core digest generation function
  */
 async function generateDigest(options = {}) {
-  const { isTest = false, skipEmail = false, hubspotApiKey, recipients: recipientOverride } = options;
+  const { isTest = false, skipEmail = false, hubspotApiKey, recipients: recipientOverride, previewUrl } = options;
 
   // For multi-tenant: temporarily set the API key for this run
   const originalKey = process.env.HUBSPOT_ACCESS_TOKEN;
@@ -182,6 +182,7 @@ async function generateDigest(options = {}) {
     ownerMap: Array.isArray(ownerMap) ? {} : ownerMap,
     stageMap: Array.isArray(stageMap) ? {} : stageMap,
     errors,
+    previewUrl,
   });
 
   const subject = generateSubject(formatDate(now, accountTimezone).split(',')[0], totalActivities);
@@ -272,9 +273,11 @@ async function runAllTenants() {
     console.log(`\n${'─'.repeat(60)}`);
     console.log(`Tenant: ${tenant.name}`);
     try {
+      const appUrl = (process.env.APP_URL || '').replace(/\/$/, '');
       await runDigest({
         hubspotApiKey: tenant.hubspot_api_key,
         recipients: tenant.recipient_emails,
+        previewUrl: appUrl ? `${appUrl}/dashboard/preview/${tenant.id}` : undefined,
       });
       await updateTenantDigestStatus(tenant.id, 'success');
     } catch (err) {

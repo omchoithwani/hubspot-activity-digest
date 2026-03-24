@@ -19,6 +19,9 @@ const DANGER     = '#DC2626';
 // instead of a (potentially thousands-of-rows) table.
 const BULK_THRESHOLD = 50;
 
+// Max rows shown per section in the email. If exceeded, a "View more" link is shown.
+const VIEW_MORE_LIMIT = 25;
+
 /**
  * Format a currency amount
  */
@@ -115,10 +118,25 @@ function activityRow(cells, isAlt = false) {
 }
 
 /**
- * Render a table with headers
+ * Render a table with headers.
+ * If rows exceed VIEW_MORE_LIMIT and a viewMoreUrl is provided, truncates and adds a link row.
  */
-function activityTable(headers, rows) {
+function activityTable(headers, rows, viewMoreUrl) {
   if (rows.length === 0) return `<tr><td><p style="color:${TEXT_MUTED};font-style:italic;font-family:'DM Sans',Arial,sans-serif;font-size:13px;padding:8px 0;">No activity recorded.</p></td></tr>`;
+
+  const truncated = viewMoreUrl && rows.length > VIEW_MORE_LIMIT;
+  const visibleRows = truncated ? rows.slice(0, VIEW_MORE_LIMIT) : rows;
+  const hiddenCount = rows.length - VIEW_MORE_LIMIT;
+
+  const viewMoreRow = truncated ? `
+    <tr style="background:${LIGHT_GRAY};">
+      <td colspan="${headers.length}" style="padding:12px 14px;text-align:center;border-top:1px solid ${BORDER};">
+        <a href="${viewMoreUrl}" style="font-size:12px;font-weight:700;color:${RED};font-family:'DM Sans',Arial,sans-serif;text-decoration:none;">
+          View ${hiddenCount} more record${hiddenCount !== 1 ? 's' : ''} &rarr;
+        </a>
+      </td>
+    </tr>` : '';
+
   return `
     <tr>
       <td style="padding-bottom:20px;">
@@ -126,7 +144,8 @@ function activityTable(headers, rows) {
           <tr style="background:${LIGHT_GRAY};">
             ${headers.map((h) => `<th style="padding:9px 14px;font-size:11px;font-weight:700;color:${TEXT_MUTED};text-align:left;text-transform:uppercase;letter-spacing:0.6px;font-family:'DM Sans',Arial,sans-serif;border-bottom:1px solid ${BORDER};">${h}</th>`).join('')}
           </tr>
-          ${rows.map((r, i) => activityRow(r, i % 2 === 1)).join('')}
+          ${visibleRows.map((r, i) => activityRow(r, i % 2 === 1)).join('')}
+          ${viewMoreRow}
         </table>
       </td>
     </tr>`;
@@ -173,7 +192,7 @@ function stageBadge(from, to) {
 /**
  * Main function to generate the HTML email
  */
-function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
+function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors, previewUrl }) {
   const {
     dealsCreated = [],
     dealStageChanges = [],
@@ -613,7 +632,8 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
                 </tr>
                 ${activityTable(
                   ['Name', 'Email', 'Company', 'Platform', 'Campaign', 'Created'],
-                  adLeadRows
+                  adLeadRows,
+                  previewUrl
                 )}` : ''}
 
                 <!-- Deals Created -->
@@ -621,7 +641,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
                 ${sectionHeader('Deals Created', dealsCreated.length)}
                 ${dealsCreated.length >= BULK_THRESHOLD
                   ? bulkSummaryBlock(dealsCreated.length, 'deal')
-                  : activityTable(['Deal Name', 'Created', 'Pipeline', 'Stage', 'Amount', 'Owner'], dealsCreatedRows)
+                  : activityTable(['Deal Name', 'Created', 'Pipeline', 'Stage', 'Amount', 'Owner'], dealsCreatedRows, previewUrl)
                 }` : ''}
 
                 <!-- Deal Stage Changes -->
@@ -629,7 +649,8 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
                 ${sectionHeader('Deal Stage Changes', dealStageChanges.length)}
                 ${activityTable(
                   ['Deal Name', 'Stage Transition', 'Owner', 'Changed At'],
-                  stageChangeRows
+                  stageChangeRows,
+                  previewUrl
                 )}` : ''}
 
                 <!-- Tasks Completed -->
@@ -637,7 +658,8 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
                 ${sectionHeader('Tasks Completed', tasksCompleted.length)}
                 ${activityTable(
                   ['Task Subject', 'Type', 'Due Date', 'Owner'],
-                  tasksRows
+                  tasksRows,
+                  previewUrl
                 )}` : ''}
 
                 <!-- Calls Logged -->
@@ -645,7 +667,8 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
                 ${sectionHeader('Calls Logged', callsLogged.length)}
                 ${activityTable(
                   ['Title', 'Time', 'Direction', 'Duration', 'Owner'],
-                  callsRows
+                  callsRows,
+                  previewUrl
                 )}` : ''}
 
                 <!-- Emails Sent -->
@@ -653,7 +676,8 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
                 ${sectionHeader('Emails Sent', emailsSent.length)}
                 ${activityTable(
                   ['Subject', 'To', 'Status', 'Owner'],
-                  emailRows
+                  emailRows,
+                  previewUrl
                 )}` : ''}
 
                 <!-- Meetings Booked -->
@@ -661,7 +685,8 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
                 ${sectionHeader('Meetings Booked', meetingsBooked.length)}
                 ${activityTable(
                   ['Title', 'Start Time', 'Outcome', 'Owner'],
-                  meetingRows
+                  meetingRows,
+                  previewUrl
                 )}` : ''}
 
                 <!-- Notes Added -->
@@ -669,7 +694,8 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
                 ${sectionHeader('Notes Added', notesAdded.length)}
                 ${activityTable(
                   ['Note Preview', 'Contact', 'Deal', 'Owner'],
-                  noteRows
+                  noteRows,
+                  previewUrl
                 )}` : ''}
 
                 <!-- Contacts Created -->
@@ -677,7 +703,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
                 ${sectionHeader('Contacts Created', contactsCreated.length)}
                 ${contactsCreated.length >= BULK_THRESHOLD
                   ? bulkSummaryBlock(contactsCreated.length, 'contact')
-                  : activityTable(['Name', 'Email', 'Company', 'Created', 'Owner'], contactRows)
+                  : activityTable(['Name', 'Email', 'Company', 'Created', 'Owner'], contactRows, previewUrl)
                 }` : ''}
 
                 <!-- Companies Created -->
@@ -685,7 +711,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
                 ${sectionHeader('Companies Created', companiesCreated.length)}
                 ${companiesCreated.length >= BULK_THRESHOLD
                   ? bulkSummaryBlock(companiesCreated.length, 'company')
-                  : activityTable(['Company Name', 'Domain', 'Industry', 'Created', 'Owner'], companyRows)
+                  : activityTable(['Company Name', 'Domain', 'Industry', 'Created', 'Owner'], companyRows, previewUrl)
                 }` : ''}
 
                 <!-- Form Submissions -->
@@ -693,7 +719,8 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
                 ${sectionHeader('Form Submissions', totalFormSubmissions)}
                 ${activityTable(
                   ['Form', 'Submitted At', 'Email', 'Name', 'Page'],
-                  formSubmissionRows
+                  formSubmissionRows,
+                  previewUrl
                 )}` : ''}
 
                 `}
