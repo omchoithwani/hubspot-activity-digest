@@ -1,17 +1,21 @@
 'use strict';
 
-const Database = require('better-sqlite3');
-const path = require('path');
-const fs = require('fs');
+const { createClient } = require('@libsql/client');
 
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'config.db');
+// Local file fallback for development; Turso cloud URL for production
+const TURSO_URL = process.env.TURSO_DATABASE_URL || 'file:./data/config.db';
+const TURSO_TOKEN = process.env.TURSO_AUTH_TOKEN;
 
-function openDb() {
-  const dir = path.dirname(DB_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  const db = new Database(DB_PATH);
-  db.pragma('journal_mode = WAL');
-  db.exec(`
+function getClient() {
+  return createClient({ url: TURSO_URL, authToken: TURSO_TOKEN });
+}
+
+let schemaReady = false;
+
+async function ensureSchema() {
+  if (schemaReady) return;
+  const db = getClient();
+  await db.execute(`
     CREATE TABLE IF NOT EXISTS tenants (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -23,37 +27,44 @@ function openDb() {
       last_digest_status TEXT
     )
   `);
-  return db;
+  schemaReady = true;
 }
 
-function getAllTenants() {
-  const db = openDb();
-  return db.prepare('SELECT * FROM tenants WHERE is_active = 1 ORDER BY created_at ASC').all();
+async function getAllTenants() {
+  await ensureSchema();
+  const db = getClient();
+  const result = await db.execute('SELECT * FROM tenants WHERE is_active = 1 ORDER BY created_at ASC');
+  return result.rows;
 }
 
-function getTenant(id) {
-  const db = openDb();
-  return db.prepare('SELECT * FROM tenants WHERE id = ?').get(id);
+async function getTenant(id) {
+  await ensureSchema();
+  const db = getClient();
+  const result = await db.execute({ sql: 'SELECT * FROM tenants WHERE id = ?', args: [id] });
+  return result.rows[0] || null;
 }
 
-function createTenant({ name, hubspotApiKey, recipientEmails }) {
-  const db = openDb();
-  const result = db
-    .prepare('INSERT INTO tenants (name, hubspot_api_key, recipient_emails) VALUES (?, ?, ?)')
-    .run(name, hubspotApiKey, recipientEmails);
+async function createTenant({ name, hubspotApiKey, recipientEmails }) {
+  await ensureSchema();
+  const db = getClient();
+  const result = await db.execute({
+    sql: 'INSERT INTO tenants (name, hubspot_api_key, recipient_emails) VALUES (?, ?, ?)',
+    args: [name, hubspotApiKey, recipientEmails],
+  });
   return result.lastInsertRowid;
 }
 
-function deleteTenant(id) {
-  const db = openDb();
-  db.prepare('DELETE FROM tenants WHERE id = ?').run(id);
+async function deleteTenant(id) {
+  const db = getClient();
+  await db.execute({ sql: 'DELETE FROM tenants WHERE id = ?', args: [id] });
 }
 
-function updateTenantDigestStatus(id, status) {
-  const db = openDb();
-  db.prepare(
-    'UPDATE tenants SET last_digest_at = datetime("now"), last_digest_status = ? WHERE id = ?'
-  ).run(status, id);
+async function updateTenantDigestStatus(id, status) {
+  const db = getClient();
+  await db.execute({
+    sql: 'UPDATE tenants SET last_digest_at = datetime("now"), last_digest_status = ? WHERE id = ?',
+    args: [status, id],
+  });
 }
 
 module.exports = {

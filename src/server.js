@@ -202,39 +202,39 @@ app.get('/health', (req, res) => {
 });
 
 // Setup page
-app.get('/setup', requireAdmin, (req, res) => {
-  const tenants = getAllTenants();
+app.get('/setup', requireAdmin, async (req, res) => {
+  const tenants = await getAllTenants();
   res.send(setupPage(tenants, null));
 });
 
 // Add tenant
-app.post('/setup/tenants', requireAdmin, (req, res) => {
+app.post('/setup/tenants', requireAdmin, async (req, res) => {
   const tokenParam = process.env.ADMIN_TOKEN ? `?token=${process.env.ADMIN_TOKEN}` : '';
   const { name, hubspot_api_key, recipient_emails } = req.body;
 
   if (!name || !hubspot_api_key || !recipient_emails) {
-    const tenants = getAllTenants();
+    const tenants = await getAllTenants();
     return res.send(setupPage(tenants, 'All fields are required.'));
   }
 
   try {
-    createTenant({
+    await createTenant({
       name: name.trim(),
       hubspotApiKey: hubspot_api_key.trim(),
       recipientEmails: recipient_emails.split(',').map((e) => e.trim()).filter(Boolean).join(', '),
     });
     res.redirect(`/setup${tokenParam}`);
   } catch (err) {
-    const tenants = getAllTenants();
+    const tenants = await getAllTenants();
     res.send(setupPage(tenants, `Failed to save: ${err.message}`));
   }
 });
 
 // Delete tenant
-app.post('/setup/tenants/:id/delete', requireAdmin, (req, res) => {
+app.post('/setup/tenants/:id/delete', requireAdmin, async (req, res) => {
   const tokenParam = process.env.ADMIN_TOKEN ? `?token=${process.env.ADMIN_TOKEN}` : '';
-  const tenant = getTenant(Number(req.params.id));
-  if (tenant) deleteTenant(tenant.id);
+  const tenant = await getTenant(Number(req.params.id));
+  if (tenant) await deleteTenant(tenant.id);
   res.redirect(`/setup${tokenParam}`);
 });
 

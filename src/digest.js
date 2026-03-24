@@ -242,7 +242,7 @@ async function runDigest(options = {}) {
  */
 async function runAllTenants() {
   const { getAllTenants, updateTenantDigestStatus } = require('./db');
-  const tenants = getAllTenants();
+  const tenants = await getAllTenants();
 
   if (tenants.length === 0) {
     console.log('No tenants in database — falling back to environment variables.');
@@ -258,10 +258,10 @@ async function runAllTenants() {
         hubspotApiKey: tenant.hubspot_api_key,
         recipients: tenant.recipient_emails,
       });
-      updateTenantDigestStatus(tenant.id, 'success');
+      await updateTenantDigestStatus(tenant.id, 'success');
     } catch (err) {
       console.error(`Digest failed for ${tenant.name}:`, err.message);
-      updateTenantDigestStatus(tenant.id, `error: ${err.message.slice(0, 200)}`);
+      await updateTenantDigestStatus(tenant.id, `error: ${err.message.slice(0, 200)}`);
     }
   }
 }

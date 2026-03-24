@@ -8,20 +8,19 @@ services:
     buildCommand: npm install
     startCommand: node src/server.js
     healthCheckPath: /health
-    disk:
-      name: digest-data
-      mountPath: /data
-      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DB_PATH
-        value: /data/config.db
       - key: ADMIN_TOKEN
-        sync: false   # Protect the /setup page — set a strong random token
+        sync: false   # Protect the /setup page — set a strong random token in the Render dashboard
       - key: TRIGGER_TOKEN
         sync: false   # Optional: protect the POST /trigger endpoint
-      # SMTP settings — Hostinger email
+      # Turso database (free cloud SQLite)
+      - key: TURSO_DATABASE_URL
+        sync: false   # e.g. libsql://your-db-name.turso.io
+      - key: TURSO_AUTH_TOKEN
+        sync: false   # Turso auth token
+      # SMTP — Hostinger
       - key: SMTP_HOST
         value: smtp.hostinger.com
       - key: SMTP_PORT
@@ -29,7 +28,7 @@ services:
       - key: SMTP_USER
         value: om.choithwani@aero-rev.com
       - key: SMTP_PASS
-        sync: false   # Your Hostinger email password — set this in the Render dashboard
+        sync: false   # Your Hostinger email password
       - key: FROM_EMAIL
         value: om.choithwani@aero-rev.com
       - key: FROM_NAME
@@ -41,14 +40,20 @@ services:
     runtime: node
     region: oregon
     plan: free
-    schedule: "0 22 * * *"   # 5:00 PM EST / 10:00 PM UTC
+    schedule: "0 22 * * *"
     buildCommand: npm install
     startCommand: node src/digest.js
     envVars:
-      - key: DB_PATH
-        value: /data/config.db
       - key: NODE_ENV
         value: production
+      - fromService:
+          type: web
+          name: hubspot-digest
+          envVarKey: TURSO_DATABASE_URL
+      - fromService:
+          type: web
+          name: hubspot-digest
+          envVarKey: TURSO_AUTH_TOKEN
       - fromService:
           type: web
           name: hubspot-digest
