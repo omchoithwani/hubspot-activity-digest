@@ -57,6 +57,9 @@ function setupPage(tenants, flash) {
           <td class="small">${lastRun}</td>
           <td style="white-space:nowrap;">
             <a href="/preview/${t.id}${tokenParam}" target="_blank" class="btn-preview">Preview</a>
+            <form method="POST" action="/setup/tenants/${t.id}/send${tokenParam}" onsubmit="return confirm('Send digest now for ${escHtml(t.name)}?')" style="display:inline;">
+              <button type="submit" class="btn-send">Send Now</button>
+            </form>
             <form method="POST" action="/setup/tenants/${t.id}/delete${tokenParam}" onsubmit="return confirm('Remove ${escHtml(t.name)}?')" style="display:inline;">
               <button type="submit" class="btn-remove">Remove</button>
             </form>
@@ -110,6 +113,8 @@ function setupPage(tenants, flash) {
     .btn-remove:hover { background: #fff0f0; border-color: #c0392b; }
     .btn-preview { display: inline-block; background: none; border: 1px solid #d2d2d7; border-radius: 6px; padding: 5px 10px; font-size: 12px; color: #0071e3; text-decoration: none; margin-right: 6px; }
     .btn-preview:hover { background: #f0f6ff; border-color: #0071e3; }
+    .btn-send { background: none; border: 1px solid #d2d2d7; border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; color: #065f46; margin-right: 6px; }
+    .btn-send:hover { background: #d1fae5; border-color: #065f46; }
     table { width: 100%; border-collapse: collapse; font-size: 14px; }
     th { text-align: left; font-size: 12px; font-weight: 600; color: #6e6e73; border-bottom: 1px solid #e5e5ea; padding: 8px 12px; }
     td { padding: 12px; border-bottom: 1px solid #f2f2f7; vertical-align: top; }
@@ -239,6 +244,33 @@ app.post('/setup/tenants/:id/delete', requireAdmin, async (req, res) => {
   const tenant = await getTenant(Number(req.params.id));
   if (tenant) await deleteTenant(tenant.id);
   res.redirect(`/setup${tokenParam}`);
+});
+
+// Send digest now for a single tenant
+app.post('/setup/tenants/:id/send', requireAdmin, async (req, res) => {
+  const tokenParam = process.env.ADMIN_TOKEN ? `?token=${process.env.ADMIN_TOKEN}` : '';
+  const tenant = await getTenant(Number(req.params.id));
+  if (!tenant) {
+    const tenants = await getAllTenants();
+    return res.send(setupPage(tenants, 'Tenant not found.'));
+  }
+
+  const { runDigest } = require('./digest');
+  const { updateTenantDigestStatus } = require('./db');
+
+  try {
+    await runDigest({
+      hubspotApiKey: tenant.hubspot_api_key,
+      recipients: tenant.recipient_emails,
+    });
+    await updateTenantDigestStatus(tenant.id, 'success');
+    const tenants = await getAllTenants();
+    return res.send(setupPage(tenants, `✓ Digest sent for ${tenant.name}.`));
+  } catch (err) {
+    await updateTenantDigestStatus(tenant.id, `error: ${err.message.slice(0, 200)}`);
+    const tenants = await getAllTenants();
+    return res.send(setupPage(tenants, `Failed to send digest for ${tenant.name}: ${err.message}`));
+  }
 });
 
 // Manual trigger endpoint (protected by TRIGGER_TOKEN)
