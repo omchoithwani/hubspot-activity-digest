@@ -14,6 +14,11 @@ const SUCCESS    = '#15803D';
 const WARNING    = '#B45309';
 const DANGER     = '#DC2626';
 
+// When a single object type has >= this many records created in the window,
+// we assume it was a bulk import or integration sync and show a summary
+// instead of a (potentially thousands-of-rows) table.
+const BULK_THRESHOLD = 50;
+
 /**
  * Format a currency amount
  */
@@ -122,6 +127,30 @@ function activityTable(headers, rows) {
             ${headers.map((h) => `<th style="padding:9px 14px;font-size:11px;font-weight:700;color:${TEXT_MUTED};text-align:left;text-transform:uppercase;letter-spacing:0.6px;font-family:'DM Sans',Arial,sans-serif;border-bottom:1px solid ${BORDER};">${h}</th>`).join('')}
           </tr>
           ${rows.map((r, i) => activityRow(r, i % 2 === 1)).join('')}
+        </table>
+      </td>
+    </tr>`;
+}
+
+/**
+ * Render a bulk-import summary block instead of a full table.
+ * Used when a record type exceeds BULK_THRESHOLD creations in the window.
+ */
+function bulkSummaryBlock(count, label) {
+  return `
+    <tr>
+      <td style="padding-bottom:20px;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0"
+               style="border:1px solid ${BORDER};border-radius:8px;overflow:hidden;background:${LIGHT_GRAY};">
+          <tr>
+            <td style="padding:18px 20px;">
+              <span style="font-size:28px;font-weight:700;color:${BLACK};font-family:'DM Sans',Arial,sans-serif;">${count}</span>
+              <span style="font-size:15px;color:${TEXT_MUTED};margin-left:8px;font-family:'DM Sans',Arial,sans-serif;">${label} created</span>
+              <div style="font-size:12px;color:${TEXT_MUTED};margin-top:6px;font-family:'DM Sans',Arial,sans-serif;">
+                Volume suggests a bulk import or data integration sync — individual records not listed.
+              </div>
+            </td>
+          </tr>
         </table>
       </td>
     </tr>`;
@@ -590,10 +619,10 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
                 <!-- Deals Created -->
                 ${dealsCreated.length > 0 ? `
                 ${sectionHeader('Deals Created', dealsCreated.length)}
-                ${activityTable(
-                  ['Deal Name', 'Created', 'Pipeline', 'Stage', 'Amount', 'Owner'],
-                  dealsCreatedRows
-                )}` : ''}
+                ${dealsCreated.length >= BULK_THRESHOLD
+                  ? bulkSummaryBlock(dealsCreated.length, 'deal')
+                  : activityTable(['Deal Name', 'Created', 'Pipeline', 'Stage', 'Amount', 'Owner'], dealsCreatedRows)
+                }` : ''}
 
                 <!-- Deal Stage Changes -->
                 ${dealStageChanges.length > 0 ? `
@@ -646,18 +675,18 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
                 <!-- Contacts Created -->
                 ${contactsCreated.length > 0 ? `
                 ${sectionHeader('Contacts Created', contactsCreated.length)}
-                ${activityTable(
-                  ['Name', 'Email', 'Company', 'Created', 'Owner'],
-                  contactRows
-                )}` : ''}
+                ${contactsCreated.length >= BULK_THRESHOLD
+                  ? bulkSummaryBlock(contactsCreated.length, 'contact')
+                  : activityTable(['Name', 'Email', 'Company', 'Created', 'Owner'], contactRows)
+                }` : ''}
 
                 <!-- Companies Created -->
                 ${companiesCreated.length > 0 ? `
                 ${sectionHeader('Companies Created', companiesCreated.length)}
-                ${activityTable(
-                  ['Company Name', 'Domain', 'Industry', 'Created', 'Owner'],
-                  companyRows
-                )}` : ''}
+                ${companiesCreated.length >= BULK_THRESHOLD
+                  ? bulkSummaryBlock(companiesCreated.length, 'company')
+                  : activityTable(['Company Name', 'Domain', 'Industry', 'Created', 'Owner'], companyRows)
+                }` : ''}
 
                 <!-- Form Submissions -->
                 ${totalFormSubmissions > 0 ? `
