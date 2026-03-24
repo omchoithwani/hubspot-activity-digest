@@ -2,17 +2,16 @@
 
 const hubspot = require('@hubspot/api-client');
 
-let client;
+// Cache clients by token so multi-tenant runs each get their own client instance
+const clientCache = new Map();
 
 function getClient() {
-  if (!client) {
-    const token = process.env.HUBSPOT_ACCESS_TOKEN;
-    if (!token) {
-      throw new Error('HUBSPOT_ACCESS_TOKEN environment variable is required');
-    }
-    client = new hubspot.Client({ accessToken: token });
+  const token = process.env.HUBSPOT_ACCESS_TOKEN;
+  if (!token) throw new Error('HUBSPOT_ACCESS_TOKEN environment variable is required');
+  if (!clientCache.has(token)) {
+    clientCache.set(token, new hubspot.Client({ accessToken: token }));
   }
-  return client;
+  return clientCache.get(token);
 }
 
 /**
@@ -23,19 +22,23 @@ function sleep(ms) {
 }
 
 /**
- * Retry wrapper with exponential backoff for rate limit (429) errors
+ * Retry wrapper with exponential backoff for rate limit (429) errors.
+ * Respects the Retry-After header when present (HubSpot often sends 10s).
  */
 async function withRetry(fn, retries = 4) {
-  let delay = 1000;
+  let delay = 10000; // start at 10s — HubSpot's typical Retry-After window
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       return await fn();
     } catch (err) {
       const status = err?.response?.status || err?.statusCode;
       if (status === 429 && attempt < retries) {
-        console.warn(`Rate limited. Retrying in ${delay}ms... (attempt ${attempt + 1}/${retries})`);
-        await sleep(delay);
-        delay *= 2;
+        // Honour Retry-After header if present (value is in seconds)
+        const retryAfter = err?.response?.headers?.['retry-after'];
+        const waitMs = retryAfter ? Math.ceil(parseFloat(retryAfter)) * 1000 : delay;
+        console.warn(`Rate limited. Retrying in ${waitMs}ms... (attempt ${attempt + 1}/${retries})`);
+        await sleep(waitMs);
+        delay = Math.max(delay * 2, waitMs * 2);
       } else {
         throw err;
       }

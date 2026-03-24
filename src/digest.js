@@ -104,40 +104,29 @@ async function generateDigest(options = {}) {
     safelyFetch('Deal Stages', fetchDealStages, errors),
   ]);
 
-  // Fetch activity types sequentially in pairs to stay well within HubSpot's
-  // per-second search rate limit. Each pair shares one 300ms gap.
+  // Fetch activity types one at a time with a 500ms gap between each call.
+  // HubSpot's Search API allows 4 req/s; each searchAll may paginate internally,
+  // so running even two in parallel can trigger 429s.
   console.log('\nFetching activities...');
-  const [dealsCreated, dealStageChanges] = await Promise.all([
-    safelyFetch('Deals Created', () => fetchDealsCreated(range), errors),
-    safelyFetch('Deal Stage Changes', () => fetchDealStageChanges(range), errors),
-  ]);
+  const gap = () => new Promise((r) => setTimeout(r, 500));
 
-  await new Promise((r) => setTimeout(r, 300));
-
-  const [tasksCompleted, callsLogged] = await Promise.all([
-    safelyFetch('Tasks Completed', () => fetchTasksCompleted(range), errors),
-    safelyFetch('Calls Logged', () => fetchCallsLogged(range), errors),
-  ]);
-
-  await new Promise((r) => setTimeout(r, 300));
-
-  const [emailsSent, meetingsBooked] = await Promise.all([
-    safelyFetch('Emails Sent', () => fetchEmailsSent(range), errors),
-    safelyFetch('Meetings Booked', () => fetchMeetingsBooked(range), errors),
-  ]);
-
-  await new Promise((r) => setTimeout(r, 300));
-
-  const [notesAdded, contactsCreated] = await Promise.all([
-    safelyFetch('Notes Added', () => fetchNotesAdded(range), errors),
-    safelyFetch('Contacts Created', () => fetchContactsCreated(range), errors),
-  ]);
-
-  await new Promise((r) => setTimeout(r, 300));
-
-  const [companiesCreated] = await Promise.all([
-    safelyFetch('Companies Created', () => fetchCompaniesCreated(range), errors),
-  ]);
+  const dealsCreated = await safelyFetch('Deals Created', () => fetchDealsCreated(range), errors);
+  await gap();
+  const dealStageChanges = await safelyFetch('Deal Stage Changes', () => fetchDealStageChanges(range), errors);
+  await gap();
+  const tasksCompleted = await safelyFetch('Tasks Completed', () => fetchTasksCompleted(range), errors);
+  await gap();
+  const callsLogged = await safelyFetch('Calls Logged', () => fetchCallsLogged(range), errors);
+  await gap();
+  const emailsSent = await safelyFetch('Emails Sent', () => fetchEmailsSent(range), errors);
+  await gap();
+  const meetingsBooked = await safelyFetch('Meetings Booked', () => fetchMeetingsBooked(range), errors);
+  await gap();
+  const notesAdded = await safelyFetch('Notes Added', () => fetchNotesAdded(range), errors);
+  await gap();
+  const contactsCreated = await safelyFetch('Contacts Created', () => fetchContactsCreated(range), errors);
+  await gap();
+  const companiesCreated = await safelyFetch('Companies Created', () => fetchCompaniesCreated(range), errors);
 
   // Form submissions are sequential (one request per form), fetch after the parallel batch
   const formsSubmitted = await safelyFetch('Form Submissions', () => fetchFormsSubmitted(range), errors);
