@@ -1,17 +1,33 @@
 'use strict';
 
 const hubspot = require('@hubspot/api-client');
+const { AsyncLocalStorage } = require('async_hooks');
 
-// Cache clients by token so multi-tenant runs each get their own client instance
+// Per-async-context token store — isolates concurrent multi-tenant digest runs
+// so they never read each other's HUBSPOT_ACCESS_TOKEN.
+const tokenStorage = new AsyncLocalStorage();
+
+// Cache clients by token value to avoid recreating them on every call
 const clientCache = new Map();
 
 function getClient() {
-  const token = process.env.HUBSPOT_ACCESS_TOKEN;
+  // Prefer the token bound to the current async context (set by runWithToken),
+  // fall back to the env var for single-tenant / CLI usage.
+  const token = tokenStorage.getStore() || process.env.HUBSPOT_ACCESS_TOKEN;
   if (!token) throw new Error('HUBSPOT_ACCESS_TOKEN environment variable is required');
   if (!clientCache.has(token)) {
     clientCache.set(token, new hubspot.Client({ accessToken: token }));
   }
   return clientCache.get(token);
+}
+
+/**
+ * Run an async function with a specific HubSpot token bound to the current
+ * async context. All getClient() calls within fn() will use this token,
+ * even if concurrent requests change process.env.HUBSPOT_ACCESS_TOKEN.
+ */
+function runWithToken(token, fn) {
+  return tokenStorage.run(token, fn);
 }
 
 /**
@@ -685,6 +701,7 @@ async function fetchNoteAssociations(noteIds) {
 }
 
 module.exports = {
+  runWithToken,
   fetchOwners,
   fetchDealStages,
   fetchDealsCreated,

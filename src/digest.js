@@ -3,6 +3,7 @@
 require('dotenv').config();
 
 const {
+  runWithToken,
   fetchOwners,
   fetchDealStages,
   fetchDealsCreated,
@@ -70,9 +71,16 @@ async function safelyFetch(name, fetchFn, errors) {
 async function generateDigest(options = {}) {
   const { isTest = false, skipEmail = false, hubspotApiKey, recipients: recipientOverride, previewUrl } = options;
 
-  // For multi-tenant: temporarily set the API key for this run
-  const originalKey = process.env.HUBSPOT_ACCESS_TOKEN;
-  if (hubspotApiKey) process.env.HUBSPOT_ACCESS_TOKEN = hubspotApiKey;
+  // For multi-tenant: run the whole digest inside an async context that binds
+  // this tenant's API key, so concurrent runs never clobber each other.
+  if (hubspotApiKey) {
+    return runWithToken(hubspotApiKey, () => _generateDigest(options));
+  }
+  return _generateDigest(options);
+}
+
+async function _generateDigest(options = {}) {
+  const { isTest = false, skipEmail = false, hubspotApiKey, recipients: recipientOverride, previewUrl } = options;
 
   console.log(`\n${'='.repeat(60)}`);
   console.log(`HubSpot Activity Digest — ${new Date().toISOString()}`);
@@ -188,7 +196,6 @@ async function generateDigest(options = {}) {
 
   // If preview mode, skip email and return HTML directly
   if (skipEmail) {
-    if (hubspotApiKey) process.env.HUBSPOT_ACCESS_TOKEN = originalKey;
     console.log(`\n👁  Preview mode — skipping email send.`);
     console.log('='.repeat(60) + '\n');
     return { success: true, totalActivities, errors, htmlBody };
@@ -219,12 +226,7 @@ async function generateDigest(options = {}) {
 
   // Send email
   console.log('Sending email...');
-  try {
-    await sendEmail({ toEmails: recipients, subject, htmlBody });
-  } finally {
-    // Restore original API key after this tenant's run
-    if (hubspotApiKey) process.env.HUBSPOT_ACCESS_TOKEN = originalKey;
-  }
+  await sendEmail({ toEmails: recipients, subject, htmlBody });
 
   console.log(`\n✅ Digest sent successfully!`);
   console.log(`   Subject: ${subject}`);
