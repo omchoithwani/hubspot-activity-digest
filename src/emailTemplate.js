@@ -227,7 +227,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors }) {
   const tasksRows = tasksCompleted.map((t) => [
     `<strong style="color:${WHITE};">${t.properties?.hs_task_subject || 'Untitled Task'}</strong>`,
     t.properties?.hs_task_type || '—',
-    formatDateOnly(t.properties?.hs_task_due_date),
+    formatDateOnly(t.properties?.hs_timestamp),
     ownerName(t.properties?.hubspot_owner_id),
   ]);
 

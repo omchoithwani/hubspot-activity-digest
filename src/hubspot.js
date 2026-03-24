@@ -300,7 +300,7 @@ async function fetchTasksCompleted({ startMs, endMs }) {
             ],
           },
         ],
-        properties: ['hs_task_subject', 'hs_task_type', 'hubspot_owner_id', 'hs_task_body', 'hs_timestamp', 'hs_task_due_date'],
+        properties: ['hs_task_subject', 'hs_task_type', 'hubspot_owner_id', 'hs_task_body', 'hs_timestamp'],
         sorts: [{ propertyName: 'hs_lastmodifieddate', direction: 'DESCENDING' }],
       }
     );
@@ -567,13 +567,13 @@ async function fetchNoteAssociations(noteIds) {
     const resp = await withRetry(() =>
       c.apiRequest({
         method: 'POST',
-        path: `/crm/v4/associations/notes/${toType}/batch/read`,
+        path: `/crm/v3/associations/notes/${toType}/batch/read`,
         body: { inputs: noteIds.map((id) => ({ id })) },
       })
     );
     const map = {};
     for (const r of resp.results || []) {
-      map[String(r.from.id)] = (r.to || []).map((t) => String(t.toObjectId));
+      map[String(r.from.id)] = (r.to || []).map((t) => String(t.id));
     }
     return map;
   }
