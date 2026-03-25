@@ -438,6 +438,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors, previe
   const tasksRows = tasksCompleted.map((t) => [
     `<strong>${t.properties?.hs_task_subject || 'Untitled Task'}</strong>`,
     t.properties?.hs_task_type || '—',
+    formatDateOnly(t.properties?.hs_task_completion_date),
     formatDateOnly(t.properties?.hs_timestamp),
     ownerName(t.properties?.hubspot_owner_id),
   ]);
@@ -660,7 +661,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors, previe
                 ${tasksCompleted.length > 0 ? `
                 ${sectionHeader('Tasks Completed', tasksCompleted.length)}
                 ${activityTable(
-                  ['Task Subject', 'Type', 'Due Date', 'Owner'],
+                  ['Task Subject', 'Type', 'Completed At', 'Due Date', 'Owner'],
                   tasksRows,
                   previewUrl,
                   showAll
