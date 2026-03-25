@@ -50,6 +50,13 @@ async function ensureSchema() {
     // Column already exists — safe to ignore
   }
 
+  // Migration: add paypal_subscription_id column (ignore if already exists)
+  try {
+    await db.execute('ALTER TABLE users ADD COLUMN paypal_subscription_id TEXT');
+  } catch (_) {
+    // Column already exists — safe to ignore
+  }
+
   schemaReady = true;
 }
 
@@ -85,26 +92,24 @@ async function getUserById(id) {
   return result.rows[0] || null;
 }
 
-async function getUserByStripeCustomer(stripeCustomerId) {
+async function getUserByPaypalSubscription(paypalSubscriptionId) {
   await ensureSchema();
   const db = getClient();
   const result = await db.execute({
-    sql: 'SELECT * FROM users WHERE stripe_customer_id = ?',
-    args: [stripeCustomerId],
+    sql: 'SELECT * FROM users WHERE paypal_subscription_id = ?',
+    args: [paypalSubscriptionId],
   });
   return result.rows[0] || null;
 }
 
-async function updateUserSubscription(id, { stripeCustomerId, stripeSubscriptionId, status, stripePriceId }) {
+async function updateUserSubscription(id, { paypalSubscriptionId, status }) {
   const db = getClient();
   await db.execute({
     sql: `UPDATE users SET
-      stripe_customer_id = ?,
-      stripe_subscription_id = ?,
-      subscription_status = ?,
-      stripe_price_id = ?
+      paypal_subscription_id = ?,
+      subscription_status = ?
       WHERE id = ?`,
-    args: [stripeCustomerId, stripeSubscriptionId, status, stripePriceId, id],
+    args: [paypalSubscriptionId !== undefined ? paypalSubscriptionId : null, status, id],
   });
 }
 
@@ -172,7 +177,7 @@ module.exports = {
   createUser,
   getUserByEmail,
   getUserById,
-  getUserByStripeCustomer,
+  getUserByPaypalSubscription,
   updateUserSubscription,
   // Tenants
   getAllTenants,

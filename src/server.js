@@ -25,23 +25,22 @@ const {
   clearSessionCookie,
   trialDaysLeft,
 } = require('./auth');
-const { PLANS, fetchLivePrices, createCheckoutSession, createPortalSession, handleWebhookEvent } = require('./stripe');
+const { PLANS, fetchLivePrices, createCheckoutSession, captureOrder, getSubscription, handleWebhookEvent } = require('./paypal');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ─── Stripe webhook — MUST be registered before body parsers ─────────────────
+// ─── PayPal webhook — MUST be registered before body parsers ─────────────────
 
 app.post(
-  '/stripe/webhook',
+  '/paypal/webhook',
   express.raw({ type: 'application/json' }),
   async (req, res) => {
-    const sig = req.headers['stripe-signature'];
     try {
-      const result = await handleWebhookEvent(req.body, sig);
+      const result = await handleWebhookEvent(req.body, req.headers);
       res.json({ received: true, ...result });
     } catch (err) {
-      console.error('[stripe webhook]', err.message);
+      console.error('[paypal webhook]', err.message);
       res.status(400).send(`Webhook Error: ${err.message}`);
     }
   }
@@ -341,11 +340,11 @@ function billingPage(user, flash, expired, livePrices = {}) {
     })
     .join('');
 
-  const portalSection = (status === 'active' || status === 'lifetime') && user.stripe_customer_id
+  const portalSection = (status === 'active' || status === 'lifetime') && user.paypal_subscription_id
     ? `<div class="card">
         <h2>Manage Subscription</h2>
-        <p style="font-size:14px;color:#6e6e73;margin-bottom:16px;">Update payment method, view invoices, or cancel your subscription.</p>
-        <a href="/billing/portal" class="btn-secondary">Open Billing Portal</a>
+        <p style="font-size:14px;color:#6e6e73;margin-bottom:16px;">Update payment method or cancel your subscription via PayPal.</p>
+        <a href="/billing/portal" class="btn-secondary">Manage on PayPal</a>
        </div>`
     : '';
 
@@ -530,26 +529,47 @@ app.post('/billing/checkout', requireAuth, loadUser, async (req, res) => {
   }
 });
 
-app.get('/billing/portal', requireAuth, loadUser, async (req, res) => {
-  if (!req.dbUser.stripe_customer_id) return res.redirect('/billing');
-
-  try {
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const url = await createPortalSession({ customerId: req.dbUser.stripe_customer_id, baseUrl });
-    res.redirect(url);
-  } catch (err) {
-    console.error('[billing portal]', err.message);
-    res.redirect('/billing');
-  }
+app.get('/billing/portal', requireAuth, loadUser, (req, res) => {
+  // PayPal has no hosted portal — send users to their PayPal autopay page
+  res.redirect('https://www.paypal.com/myaccount/autopay/');
 });
 
-app.get('/billing/success', requireAuth, loadUser, (req, res) => {
+app.get('/billing/success', requireAuth, loadUser, async (req, res) => {
+  const { updateUserSubscription } = require('./db');
+  const { type, subscription_id: subscriptionId, token: orderId } = req.query;
+
+  try {
+    if (type === 'subscription' && subscriptionId) {
+      const sub = await getSubscription(subscriptionId);
+      const [userId] = (sub.custom_id || '').split(':');
+      if (Number(userId) === req.dbUser.id) {
+        await updateUserSubscription(req.dbUser.id, {
+          paypalSubscriptionId: sub.id,
+          status: 'active',
+        });
+      }
+    } else if (type === 'order' && orderId) {
+      const capture = await captureOrder(orderId);
+      const customId = capture.purchase_units?.[0]?.payments?.captures?.[0]?.custom_id
+        || capture.purchase_units?.[0]?.custom_id;
+      const [userId, plan] = (customId || '').split(':');
+      if (Number(userId) === req.dbUser.id && plan === 'lifetime') {
+        await updateUserSubscription(req.dbUser.id, {
+          paypalSubscriptionId: capture.purchase_units?.[0]?.payments?.captures?.[0]?.id || orderId,
+          status: 'lifetime',
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[billing/success]', err.message);
+  }
+
   res.send(`${baseHead('Payment Successful')}
 </head>
 <body>
   ${navbar(req.dbUser)}
   <div style="max-width:500px;margin:80px auto;padding:0 20px;text-align:center;">
-    <div style="font-size:48px;margin-bottom:16px;">✓</div>
+    <div style="font-size:48px;margin-bottom:16px;">&#10003;</div>
     <h1 style="font-size:22px;font-weight:700;margin-bottom:8px;">Payment successful!</h1>
     <p style="font-size:14px;color:#6e6e73;margin-bottom:24px;">Your account is now active. Head to your dashboard to get started.</p>
     <a href="/dashboard" class="btn-primary" style="display:inline-block;padding:10px 24px;">Go to Dashboard</a>
