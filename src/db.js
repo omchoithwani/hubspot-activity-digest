@@ -206,6 +206,23 @@ async function updateTenantSettings(id, { digestFrequency, digestDay, digestHour
   });
 }
 
+async function adminUpdateUser(id, { status, trialEndsAt }) {
+  const db = getClient();
+  const sets = [];
+  const args = [];
+  if (status !== undefined) { sets.push('subscription_status = ?'); args.push(status); }
+  if (trialEndsAt !== undefined) { sets.push('trial_ends_at = ?'); args.push(trialEndsAt); }
+  if (sets.length === 0) return;
+  args.push(id);
+  await db.execute({ sql: `UPDATE users SET ${sets.join(', ')} WHERE id = ?`, args });
+}
+
+async function deleteUser(id) {
+  const db = getClient();
+  await db.execute({ sql: 'DELETE FROM tenants WHERE user_id = ?', args: [id] });
+  await db.execute({ sql: 'DELETE FROM users WHERE id = ?', args: [id] });
+}
+
 async function getAllUsersWithTenants() {
   await ensureSchema();
   const db = getClient();
@@ -229,6 +246,8 @@ async function getAllUsersWithTenants() {
 
 module.exports = {
   // Users
+  adminUpdateUser,
+  deleteUser,
   getAllUsersWithTenants,
   createUser,
   getUserByEmail,

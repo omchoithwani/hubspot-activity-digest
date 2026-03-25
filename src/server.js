@@ -7,6 +7,8 @@ const cookieParser = require('cookie-parser');
 const bcrypt = require('bcryptjs');
 const { state, generateDigest } = require('./digest');
 const {
+  adminUpdateUser,
+  deleteUser,
   getAllUsersWithTenants,
   getAllTenants,
   getAllTenantsForUser,
@@ -1069,18 +1071,22 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-function adminPage(users) {
-  const totalUsers     = users.length;
-  const activeCount    = users.filter(u => u.subscription_status === 'active').length;
-  const lifetimeCount  = users.filter(u => u.subscription_status === 'lifetime').length;
-  const trialCount     = users.filter(u => u.subscription_status === 'trial').length;
-  const totalTenants   = users.reduce((sum, u) => sum + u.tenants.length, 0);
+function adminPage(users, flash) {
+  const totalUsers    = users.length;
+  const activeCount   = users.filter(u => u.subscription_status === 'active').length;
+  const lifetimeCount = users.filter(u => u.subscription_status === 'lifetime').length;
+  const trialCount    = users.filter(u => u.subscription_status === 'trial').length;
+  const totalTenants  = users.reduce((sum, u) => sum + u.tenants.length, 0);
+
+  const flashHtml = flash
+    ? `<div class="flash ${flash.startsWith('✓') ? 'flash-ok' : 'flash-err'}" style="margin-bottom:20px;">${escHtml(flash)}</div>`
+    : '';
 
   const statCards = [
-    { label: 'Total users',    value: totalUsers   },
-    { label: 'Active (paid)',  value: activeCount + lifetimeCount },
-    { label: 'On trial',       value: trialCount   },
-    { label: 'Companies',      value: totalTenants },
+    { label: 'Total users',   value: totalUsers },
+    { label: 'Active (paid)', value: activeCount + lifetimeCount },
+    { label: 'On trial',      value: trialCount },
+    { label: 'Companies',     value: totalTenants },
   ].map(s => `
     <div style="background:#fff;border-radius:var(--radius-lg);padding:20px 24px;box-shadow:var(--shadow);text-align:center;flex:1;min-width:130px;">
       <div style="font-size:30px;font-weight:700;letter-spacing:-.02em;color:var(--gray-900);">${s.value}</div>
@@ -1088,7 +1094,10 @@ function adminPage(users) {
     </div>`).join('');
 
   const userRows = users.map(u => {
-    const daysLeft = Math.max(0, Math.ceil((new Date(u.trial_ends_at + ' UTC') - Date.now()) / 86400000));
+    const trialEndsAt = new Date(u.trial_ends_at + ' UTC');
+    const daysLeft = Math.max(0, Math.ceil((trialEndsAt - Date.now()) / 86400000));
+    const trialDateValue = trialEndsAt.toISOString().split('T')[0];
+
     const statusBadge = {
       trial:     `<span class="badge badge-pending">Trial · ${daysLeft}d left</span>`,
       active:    '<span class="badge badge-ok">Active</span>',
@@ -1098,55 +1107,94 @@ function adminPage(users) {
 
     const joinedDate = new Date(u.created_at + ' UTC').toLocaleDateString('en-US', { dateStyle: 'medium' });
 
+    const statusOpts = ['trial','active','lifetime','cancelled'].map(s =>
+      `<option value="${s}"${u.subscription_status === s ? ' selected' : ''}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`
+    ).join('');
+
     const tenantRows = u.tenants.length === 0
-      ? `<tr><td colspan="4" style="color:var(--gray-400);font-size:12px;padding:8px 12px;">No companies</td></tr>`
+      ? `<tr><td colspan="5" style="color:var(--gray-400);font-size:12px;padding:10px 12px;text-align:center;">No companies connected</td></tr>`
       : u.tenants.map(t => {
           const lastRun = t.last_digest_at
             ? new Date(t.last_digest_at + ' UTC').toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })
             : '—';
-          const tStatusBadge = t.last_digest_status
-            ? (t.last_digest_status === 'success'
-                ? '<span class="badge badge-ok">OK</span>'
-                : '<span class="badge badge-err">Error</span>')
+          const tBadge = t.last_digest_status
+            ? (t.last_digest_status === 'success' ? '<span class="badge badge-ok">OK</span>' : '<span class="badge badge-err">Error</span>')
             : '<span class="badge badge-pending">—</span>';
           return `<tr>
-            <td style="padding:7px 12px;font-size:13px;">${escHtml(t.name)}</td>
-            <td style="padding:7px 12px;font-size:12px;color:var(--gray-500);">${escHtml(t.recipient_emails)}</td>
-            <td style="padding:7px 12px;">${tStatusBadge}</td>
-            <td style="padding:7px 12px;font-size:12px;color:var(--gray-500);">${lastRun}</td>
+            <td style="padding:8px 12px;font-size:13px;font-weight:500;">${escHtml(t.name)}</td>
+            <td style="padding:8px 12px;font-size:12px;color:var(--gray-500);">${escHtml(t.recipient_emails)}</td>
+            <td style="padding:8px 12px;">${tBadge}</td>
+            <td style="padding:8px 12px;font-size:12px;color:var(--gray-500);">${lastRun}</td>
+            <td style="padding:8px 12px;">
+              <div style="display:flex;gap:6px;">
+                <form method="POST" action="/admin/tenants/${t.id}/send" style="display:inline;" onsubmit="return confirm('Send digest for ${escHtml(t.name)}?')">
+                  <button class="btn-sm btn-outline-green" type="submit">Send digest</button>
+                </form>
+                <form method="POST" action="/admin/tenants/${t.id}/delete" style="display:inline;" onsubmit="return confirm('Delete company ${escHtml(t.name)}? This cannot be undone.')">
+                  <button class="btn-sm btn-outline-red" type="submit">Delete</button>
+                </form>
+              </div>
+            </td>
           </tr>`;
         }).join('');
 
     return `
-      <div class="card" style="margin-bottom:14px;padding:20px 24px;">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+      <div class="card" style="margin-bottom:16px;">
+        <!-- User header -->
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
           <div>
             <div style="font-size:14px;font-weight:600;">${escHtml(u.email)}</div>
-            <div style="font-size:12px;color:var(--gray-400);margin-top:2px;">Joined ${joinedDate} · ID ${u.id}</div>
+            <div style="font-size:12px;color:var(--gray-400);margin-top:2px;">Joined ${joinedDate} &middot; ID #${u.id}</div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             ${statusBadge}
             <span style="font-size:12px;background:var(--gray-100);color:var(--gray-500);border-radius:4px;padding:2px 7px;">${u.tenants.length} compan${u.tenants.length !== 1 ? 'ies' : 'y'}</span>
           </div>
         </div>
-        ${u.tenants.length > 0 ? `
-        <div style="margin-top:14px;border-top:1px solid var(--gray-100);padding-top:12px;">
-          <table style="font-size:13px;">
+
+        <!-- Admin controls -->
+        <div style="display:flex;gap:10px;flex-wrap:wrap;padding:14px;background:var(--gray-50);border-radius:var(--radius);border:1px solid var(--gray-200);">
+
+          <!-- Change status -->
+          <form method="POST" action="/admin/users/${u.id}/status" style="display:flex;align-items:center;gap:6px;">
+            <label style="font-size:12px;font-weight:500;color:var(--gray-500);white-space:nowrap;">Plan:</label>
+            <select name="status" style="font-size:13px;padding:5px 28px 5px 8px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm);background:#fff;">${statusOpts}</select>
+            <button type="submit" class="btn-sm btn-outline">Save</button>
+          </form>
+
+          <!-- Extend trial -->
+          <form method="POST" action="/admin/users/${u.id}/trial" style="display:flex;align-items:center;gap:6px;">
+            <label style="font-size:12px;font-weight:500;color:var(--gray-500);white-space:nowrap;">Trial ends:</label>
+            <input type="date" name="trial_ends_at" value="${trialDateValue}"
+              style="font-size:13px;padding:5px 8px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm);font-family:inherit;">
+            <button type="submit" class="btn-sm btn-outline">Update</button>
+          </form>
+
+          <!-- Delete user -->
+          <form method="POST" action="/admin/users/${u.id}/delete" style="margin-left:auto;"
+            onsubmit="return confirm('Permanently delete ${escHtml(u.email)} and all their companies? This cannot be undone.')">
+            <button type="submit" class="btn-sm btn-outline-red">Delete user</button>
+          </form>
+        </div>
+
+        <!-- Companies table -->
+        <div style="margin-top:14px;">
+          <table>
             <thead>
               <tr>
                 <th>Company</th>
                 <th>Recipients</th>
                 <th>Last status</th>
                 <th>Last run</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>${tenantRows}</tbody>
           </table>
-        </div>` : ''}
+        </div>
       </div>`;
   }).join('');
 
-  // Fake user object for navbar (admin is already logged in)
   const fakeUser = { email: process.env.ADMIN_EMAIL || 'admin' };
 
   return `${baseHead('Admin')}
@@ -1156,11 +1204,13 @@ function adminPage(users) {
 </head>
 <body>
   ${navbar(fakeUser, 'admin')}
-  <div class="container">
+  <div class="container" style="max-width:980px;">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;">
       <h1 style="font-size:20px;font-weight:700;">Admin</h1>
       <span class="admin-nav-badge">Owner</span>
     </div>
+
+    ${flashHtml}
 
     <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:28px;">
       ${statCards}
@@ -1179,9 +1229,59 @@ function adminPage(users) {
 </html>`;
 }
 
+// Admin routes
 app.get('/admin', requireAuth, loadUser, requireAdmin, async (req, res) => {
   const users = await getAllUsersWithTenants();
-  res.send(adminPage(users));
+  const flash = req.query.flash ? decodeURIComponent(req.query.flash) : null;
+  res.send(adminPage(users, flash));
+});
+
+app.post('/admin/users/:id/status', requireAuth, loadUser, requireAdmin, async (req, res) => {
+  const validStatuses = ['trial', 'active', 'lifetime', 'cancelled'];
+  const status = validStatuses.includes(req.body.status) ? req.body.status : null;
+  if (!status) return res.redirect('/admin?flash=' + encodeURIComponent('Invalid status.'));
+  await adminUpdateUser(Number(req.params.id), { status });
+  res.redirect('/admin?flash=' + encodeURIComponent(`✓ Plan updated to "${status}".`));
+});
+
+app.post('/admin/users/:id/trial', requireAuth, loadUser, requireAdmin, async (req, res) => {
+  const dateStr = req.body.trial_ends_at;
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return res.redirect('/admin?flash=' + encodeURIComponent('Invalid date.'));
+  }
+  const trialEndsAt = dateStr + ' 00:00:00';
+  await adminUpdateUser(Number(req.params.id), { trialEndsAt });
+  res.redirect('/admin?flash=' + encodeURIComponent(`✓ Trial updated to ${dateStr}.`));
+});
+
+app.post('/admin/users/:id/delete', requireAuth, loadUser, requireAdmin, async (req, res) => {
+  await deleteUser(Number(req.params.id));
+  res.redirect('/admin?flash=' + encodeURIComponent('✓ User deleted.'));
+});
+
+app.post('/admin/tenants/:id/delete', requireAuth, loadUser, requireAdmin, async (req, res) => {
+  await deleteTenant(Number(req.params.id));
+  res.redirect('/admin?flash=' + encodeURIComponent('✓ Company deleted.'));
+});
+
+app.post('/admin/tenants/:id/send', requireAuth, loadUser, requireAdmin, async (req, res) => {
+  const tenant = await getTenant(Number(req.params.id));
+  if (!tenant) return res.redirect('/admin?flash=' + encodeURIComponent('Company not found.'));
+
+  res.redirect('/admin?flash=' + encodeURIComponent(`Sending digest for ${tenant.name}…`));
+
+  const { runDigest } = require('./digest');
+  const appUrl = (process.env.APP_URL || '').replace(/\/$/, '');
+  Promise.resolve()
+    .then(() => runDigest({
+      hubspotApiKey: tenant.hubspot_api_key,
+      recipients: tenant.recipient_emails,
+      previewUrl: appUrl ? `${appUrl}/dashboard/preview/${tenant.id}` : undefined,
+      reportPeriodDays: Number(tenant.report_period_days) || 1,
+      tenantId: tenant.id,
+    }))
+    .then(() => updateTenantDigestStatus(tenant.id, 'success'))
+    .catch(err => updateTenantDigestStatus(tenant.id, `error: ${err.message.slice(0, 200)}`).catch(() => {}));
 });
 
 // ─── Error handlers ───────────────────────────────────────────────────────────
