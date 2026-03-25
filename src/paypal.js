@@ -134,6 +134,7 @@ async function createCheckoutSession({ user, plan, baseUrl }) {
           brand_name: appName,
           shipping_preference: 'NO_SHIPPING',
           user_action: 'PAY_NOW',
+          landing_page: 'GUEST_CHECKOUT',
           return_url: `${baseUrl}/billing/success?type=order`,
           cancel_url: `${baseUrl}/billing`,
         },
