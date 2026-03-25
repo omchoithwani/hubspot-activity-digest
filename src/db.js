@@ -206,8 +206,30 @@ async function updateTenantSettings(id, { digestFrequency, digestDay, digestHour
   });
 }
 
+async function getAllUsersWithTenants() {
+  await ensureSchema();
+  const db = getClient();
+  const usersResult = await db.execute(
+    'SELECT * FROM users ORDER BY created_at DESC'
+  );
+  const tenantsResult = await db.execute(
+    'SELECT * FROM tenants WHERE is_active = 1 ORDER BY created_at ASC'
+  );
+  const tenantsByUser = {};
+  for (const t of tenantsResult.rows) {
+    const uid = String(t.user_id);
+    if (!tenantsByUser[uid]) tenantsByUser[uid] = [];
+    tenantsByUser[uid].push(t);
+  }
+  return usersResult.rows.map((u) => ({
+    ...u,
+    tenants: tenantsByUser[String(u.id)] || [],
+  }));
+}
+
 module.exports = {
   // Users
+  getAllUsersWithTenants,
   createUser,
   getUserByEmail,
   getUserById,

@@ -7,6 +7,7 @@ const cookieParser = require('cookie-parser');
 const bcrypt = require('bcryptjs');
 const { state, generateDigest } = require('./digest');
 const {
+  getAllUsersWithTenants,
   getAllTenants,
   getAllTenantsForUser,
   getTenant,
@@ -256,6 +257,10 @@ function baseHead(title) {
 }
 
 function navbar(user, activePage) {
+  const isAdmin = (process.env.ADMIN_EMAIL || '').toLowerCase().trim() === (user.email || '').toLowerCase();
+  const adminLink = isAdmin
+    ? `<a href="/admin" class="nav-link${activePage === 'admin' ? ' active' : ''}" style="color:var(--red-fg);">Admin</a>`
+    : '';
   return `
   <nav class="topnav">
     <a class="nav-brand" href="/dashboard">
@@ -265,6 +270,7 @@ function navbar(user, activePage) {
     <div class="nav-links">
       <a href="/dashboard" class="nav-link${activePage === 'dashboard' ? ' active' : ''}">Dashboard</a>
       <a href="/billing"   class="nav-link${activePage === 'billing'   ? ' active' : ''}">Billing</a>
+      ${adminLink}
       <div class="nav-divider"></div>
       <span class="nav-email" title="${escHtml(user.email)}">${escHtml(user.email)}</span>
       <form method="POST" action="/logout" style="display:inline;margin-left:4px;">
@@ -1058,6 +1064,132 @@ app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 app.use((err, req, res, next) => {
   console.error('Server error:', err.message);
   res.status(500).json({ error: 'Internal server error' });
+});
+
+// ─── Admin ────────────────────────────────────────────────────────────────────
+
+function requireAdmin(req, res, next) {
+  const adminEmail = (process.env.ADMIN_EMAIL || '').toLowerCase().trim();
+  if (!adminEmail) return res.status(403).send('Admin access not configured. Set ADMIN_EMAIL env var.');
+  if (!req.user || req.user.email.toLowerCase() !== adminEmail) {
+    return res.status(403).send('Forbidden.');
+  }
+  next();
+}
+
+function adminPage(users) {
+  const totalUsers     = users.length;
+  const activeCount    = users.filter(u => u.subscription_status === 'active').length;
+  const lifetimeCount  = users.filter(u => u.subscription_status === 'lifetime').length;
+  const trialCount     = users.filter(u => u.subscription_status === 'trial').length;
+  const totalTenants   = users.reduce((sum, u) => sum + u.tenants.length, 0);
+
+  const statCards = [
+    { label: 'Total users',    value: totalUsers   },
+    { label: 'Active (paid)',  value: activeCount + lifetimeCount },
+    { label: 'On trial',       value: trialCount   },
+    { label: 'Companies',      value: totalTenants },
+  ].map(s => `
+    <div style="background:#fff;border-radius:var(--radius-lg);padding:20px 24px;box-shadow:var(--shadow);text-align:center;flex:1;min-width:130px;">
+      <div style="font-size:30px;font-weight:700;letter-spacing:-.02em;color:var(--gray-900);">${s.value}</div>
+      <div style="font-size:12px;color:var(--gray-400);margin-top:2px;font-weight:500;">${s.label}</div>
+    </div>`).join('');
+
+  const userRows = users.map(u => {
+    const daysLeft = Math.max(0, Math.ceil((new Date(u.trial_ends_at + ' UTC') - Date.now()) / 86400000));
+    const statusBadge = {
+      trial:     `<span class="badge badge-pending">Trial · ${daysLeft}d left</span>`,
+      active:    '<span class="badge badge-ok">Active</span>',
+      lifetime:  '<span class="badge badge-ok">Lifetime</span>',
+      cancelled: '<span class="badge badge-err">Cancelled</span>',
+    }[u.subscription_status] || `<span class="badge badge-pending">${escHtml(u.subscription_status)}</span>`;
+
+    const joinedDate = new Date(u.created_at + ' UTC').toLocaleDateString('en-US', { dateStyle: 'medium' });
+
+    const tenantRows = u.tenants.length === 0
+      ? `<tr><td colspan="4" style="color:var(--gray-400);font-size:12px;padding:8px 12px;">No companies</td></tr>`
+      : u.tenants.map(t => {
+          const lastRun = t.last_digest_at
+            ? new Date(t.last_digest_at + ' UTC').toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })
+            : '—';
+          const tStatusBadge = t.last_digest_status
+            ? (t.last_digest_status === 'success'
+                ? '<span class="badge badge-ok">OK</span>'
+                : '<span class="badge badge-err">Error</span>')
+            : '<span class="badge badge-pending">—</span>';
+          return `<tr>
+            <td style="padding:7px 12px;font-size:13px;">${escHtml(t.name)}</td>
+            <td style="padding:7px 12px;font-size:12px;color:var(--gray-500);">${escHtml(t.recipient_emails)}</td>
+            <td style="padding:7px 12px;">${tStatusBadge}</td>
+            <td style="padding:7px 12px;font-size:12px;color:var(--gray-500);">${lastRun}</td>
+          </tr>`;
+        }).join('');
+
+    return `
+      <div class="card" style="margin-bottom:14px;padding:20px 24px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:14px;font-weight:600;">${escHtml(u.email)}</div>
+            <div style="font-size:12px;color:var(--gray-400);margin-top:2px;">Joined ${joinedDate} · ID ${u.id}</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            ${statusBadge}
+            <span style="font-size:12px;background:var(--gray-100);color:var(--gray-500);border-radius:4px;padding:2px 7px;">${u.tenants.length} compan${u.tenants.length !== 1 ? 'ies' : 'y'}</span>
+          </div>
+        </div>
+        ${u.tenants.length > 0 ? `
+        <div style="margin-top:14px;border-top:1px solid var(--gray-100);padding-top:12px;">
+          <table style="font-size:13px;">
+            <thead>
+              <tr>
+                <th>Company</th>
+                <th>Recipients</th>
+                <th>Last status</th>
+                <th>Last run</th>
+              </tr>
+            </thead>
+            <tbody>${tenantRows}</tbody>
+          </table>
+        </div>` : ''}
+      </div>`;
+  }).join('');
+
+  // Fake user object for navbar (admin is already logged in)
+  const fakeUser = { email: process.env.ADMIN_EMAIL || 'admin' };
+
+  return `${baseHead('Admin')}
+  <style>
+    .admin-nav-badge { background:var(--red-bg);color:var(--red-fg);font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;letter-spacing:.04em;text-transform:uppercase;margin-left:6px; }
+  </style>
+</head>
+<body>
+  ${navbar(fakeUser, 'admin')}
+  <div class="container">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;">
+      <h1 style="font-size:20px;font-weight:700;">Admin</h1>
+      <span class="admin-nav-badge">Owner</span>
+    </div>
+
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:28px;">
+      ${statCards}
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <h2 style="font-size:16px;font-weight:600;">All Users</h2>
+      <span class="small">${totalUsers} total</span>
+    </div>
+
+    ${users.length === 0
+      ? `<div class="card"><div class="empty-state"><p>No users yet.</p></div></div>`
+      : userRows}
+  </div>
+</body>
+</html>`;
+}
+
+app.get('/admin', requireAuth, loadUser, requireAdmin, async (req, res) => {
+  const users = await getAllUsersWithTenants();
+  res.send(adminPage(users));
 });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
