@@ -312,13 +312,13 @@ async function fetchTasksCompleted({ startMs, endMs }) {
           {
             filters: [
               { propertyName: 'hs_task_status', operator: 'EQ', value: 'COMPLETED' },
-              { propertyName: 'hs_lastmodifieddate', operator: 'GTE', value: String(startMs) },
-              { propertyName: 'hs_lastmodifieddate', operator: 'LTE', value: String(endMs) },
+              { propertyName: 'hs_task_completion_date', operator: 'GTE', value: String(startMs) },
+              { propertyName: 'hs_task_completion_date', operator: 'LTE', value: String(endMs) },
             ],
           },
         ],
-        properties: ['hs_task_subject', 'hs_task_type', 'hubspot_owner_id', 'hs_task_body', 'hs_timestamp'],
-        sorts: [{ propertyName: 'hs_lastmodifieddate', direction: 'DESCENDING' }],
+        properties: ['hs_task_subject', 'hs_task_type', 'hubspot_owner_id', 'hs_task_body', 'hs_timestamp', 'hs_task_completion_date'],
+        sorts: [{ propertyName: 'hs_task_completion_date', direction: 'DESCENDING' }],
       }
     );
   } catch (err) {
