@@ -308,48 +308,59 @@ async function fetchDealStageChanges({ startMs, endMs }) {
  * Fetch tasks completed in the last 24 hours
  */
 async function fetchTasksCompleted({ startMs, endMs, startDateUtcMs, endDateUtcMs }) {
-  // hs_task_completion_date is a HubSpot date property: it stores midnight UTC for the
-  // date the task was completed, regardless of account timezone. We must compare against
-  // UTC-midnight values (startDateUtcMs/endDateUtcMs), NOT the local-timezone midnights
-  // (startMs/endMs), otherwise tasks completed in the early hours of the day get missed.
   const completionStart = startDateUtcMs ?? startMs;
   const completionEnd   = endDateUtcMs   ?? endMs;
 
   try {
     const c = getClient();
-    const results = await searchAll(
+
+    // Search 1: tasks where hs_task_completion_date falls in the window.
+    // (This property stores UTC midnight for the completion date.)
+    const byCompletionDate = await searchAll(
       (params) => c.crm.objects.searchApi.doSearch('tasks', params),
       {
-        filterGroups: [
-          {
-            // Primary: tasks with hs_task_completion_date in the window
-            filters: [
-              { propertyName: 'hs_task_status', operator: 'EQ', value: 'COMPLETED' },
-              { propertyName: 'hs_task_completion_date', operator: 'GTE', value: String(completionStart) },
-              { propertyName: 'hs_task_completion_date', operator: 'LT',  value: String(completionEnd) },
-            ],
-          },
-          {
-            // Fallback: tasks without hs_task_completion_date set, modified in window
-            filters: [
-              { propertyName: 'hs_task_status', operator: 'EQ', value: 'COMPLETED' },
-              { propertyName: 'hs_task_completion_date', operator: 'NOT_HAS_PROPERTY' },
-              { propertyName: 'hs_lastmodifieddate', operator: 'GTE', value: String(startMs) },
-              { propertyName: 'hs_lastmodifieddate', operator: 'LT',  value: String(endMs) },
-            ],
-          },
-        ],
+        filterGroups: [{
+          filters: [
+            { propertyName: 'hs_task_status',          operator: 'EQ',  value: 'COMPLETED' },
+            { propertyName: 'hs_task_completion_date', operator: 'GTE', value: String(completionStart) },
+            { propertyName: 'hs_task_completion_date', operator: 'LT',  value: String(completionEnd) },
+          ],
+        }],
         properties: ['hs_task_subject', 'hs_task_type', 'hubspot_owner_id', 'hs_task_body', 'hs_timestamp', 'hs_task_completion_date'],
         sorts: [{ propertyName: 'hs_task_completion_date', direction: 'DESCENDING' }],
       }
     );
 
-    // Deduplicate in case both filter groups matched the same task
+    // Search 2: tasks modified in the window that are completed.
+    // Catches tasks whose hs_task_completion_date is missing or set differently.
+    const byLastModified = await searchAll(
+      (params) => c.crm.objects.searchApi.doSearch('tasks', params),
+      {
+        filterGroups: [{
+          filters: [
+            { propertyName: 'hs_task_status',       operator: 'EQ',  value: 'COMPLETED' },
+            { propertyName: 'hs_lastmodifieddate',  operator: 'GTE', value: String(startMs) },
+            { propertyName: 'hs_lastmodifieddate',  operator: 'LT',  value: String(endMs) },
+          ],
+        }],
+        properties: ['hs_task_subject', 'hs_task_type', 'hubspot_owner_id', 'hs_task_body', 'hs_timestamp', 'hs_task_completion_date'],
+        sorts: [{ propertyName: 'hs_lastmodifieddate', direction: 'DESCENDING' }],
+      }
+    );
+
+    // Merge, deduplicate, then post-filter: if a task HAS hs_task_completion_date,
+    // only keep it when that date falls in the window (removes false positives from
+    // the lastModified search where the task was edited but completed on a different day).
     const seen = new Set();
-    return results.filter((r) => {
-      if (seen.has(r.id)) return false;
-      seen.add(r.id);
-      return true;
+    return [...byCompletionDate, ...byLastModified].filter((t) => {
+      if (seen.has(t.id)) return false;
+      seen.add(t.id);
+      const cd = t.properties?.hs_task_completion_date;
+      if (cd) {
+        const cdMs = new Date(cd).getTime();
+        return cdMs >= completionStart && cdMs < completionEnd;
+      }
+      return true; // no completion date — include it (came from lastModified search)
     });
   } catch (err) {
     console.error('Failed to fetch tasks:', err.message);
