@@ -1058,14 +1058,6 @@ app.get('/preview', requireAdmin, async (req, res) => {
   }
 });
 
-// ─── Error handlers ───────────────────────────────────────────────────────────
-
-app.use((req, res) => res.status(404).json({ error: 'Not found' }));
-app.use((err, req, res, next) => {
-  console.error('Server error:', err.message);
-  res.status(500).json({ error: 'Internal server error' });
-});
-
 // ─── Admin ────────────────────────────────────────────────────────────────────
 
 function requireAdmin(req, res, next) {
@@ -1190,6 +1182,14 @@ function adminPage(users) {
 app.get('/admin', requireAuth, loadUser, requireAdmin, async (req, res) => {
   const users = await getAllUsersWithTenants();
   res.send(adminPage(users));
+});
+
+// ─── Error handlers ───────────────────────────────────────────────────────────
+
+app.use((req, res) => res.status(404).json({ error: 'Not found' }));
+app.use((err, req, res, next) => {
+  console.error('Server error:', err.message);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
