@@ -118,6 +118,11 @@ function getReportingRange(ianaTimezone, periodDays = 1) {
   return {
     startMs: midnightUtcMs(startStr, ianaTimezone),
     endMs: midnightUtcMs(todayStr, ianaTimezone),
+    // UTC-midnight timestamps for HubSpot date-type properties (e.g. hs_task_completion_date).
+    // These properties store midnight UTC for the date regardless of account timezone,
+    // so we must use UTC midnight rather than local-timezone midnight.
+    startDateUtcMs: new Date(startStr + 'T00:00:00Z').getTime(),
+    endDateUtcMs:   new Date(todayStr + 'T00:00:00Z').getTime(),
   };
 }
 
@@ -302,18 +307,35 @@ async function fetchDealStageChanges({ startMs, endMs }) {
 /**
  * Fetch tasks completed in the last 24 hours
  */
-async function fetchTasksCompleted({ startMs, endMs }) {
+async function fetchTasksCompleted({ startMs, endMs, startDateUtcMs, endDateUtcMs }) {
+  // hs_task_completion_date is a HubSpot date property: it stores midnight UTC for the
+  // date the task was completed, regardless of account timezone. We must compare against
+  // UTC-midnight values (startDateUtcMs/endDateUtcMs), NOT the local-timezone midnights
+  // (startMs/endMs), otherwise tasks completed in the early hours of the day get missed.
+  const completionStart = startDateUtcMs ?? startMs;
+  const completionEnd   = endDateUtcMs   ?? endMs;
+
   try {
     const c = getClient();
-    return await searchAll(
+    const results = await searchAll(
       (params) => c.crm.objects.searchApi.doSearch('tasks', params),
       {
         filterGroups: [
           {
+            // Primary: tasks with hs_task_completion_date in the window
             filters: [
               { propertyName: 'hs_task_status', operator: 'EQ', value: 'COMPLETED' },
-              { propertyName: 'hs_task_completion_date', operator: 'GTE', value: String(startMs) },
-              { propertyName: 'hs_task_completion_date', operator: 'LTE', value: String(endMs) },
+              { propertyName: 'hs_task_completion_date', operator: 'GTE', value: String(completionStart) },
+              { propertyName: 'hs_task_completion_date', operator: 'LT',  value: String(completionEnd) },
+            ],
+          },
+          {
+            // Fallback: tasks without hs_task_completion_date set, modified in window
+            filters: [
+              { propertyName: 'hs_task_status', operator: 'EQ', value: 'COMPLETED' },
+              { propertyName: 'hs_task_completion_date', operator: 'NOT_HAS_PROPERTY' },
+              { propertyName: 'hs_lastmodifieddate', operator: 'GTE', value: String(startMs) },
+              { propertyName: 'hs_lastmodifieddate', operator: 'LT',  value: String(endMs) },
             ],
           },
         ],
@@ -321,6 +343,14 @@ async function fetchTasksCompleted({ startMs, endMs }) {
         sorts: [{ propertyName: 'hs_task_completion_date', direction: 'DESCENDING' }],
       }
     );
+
+    // Deduplicate in case both filter groups matched the same task
+    const seen = new Set();
+    return results.filter((r) => {
+      if (seen.has(r.id)) return false;
+      seen.add(r.id);
+      return true;
+    });
   } catch (err) {
     console.error('Failed to fetch tasks:', err.message);
     throw err;
