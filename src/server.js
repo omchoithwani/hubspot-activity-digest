@@ -75,65 +75,200 @@ function baseHead(title) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escHtml(title)} — HubSpot Digest</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f7; color: #1d1d1f; min-height: 100vh; }
-    a { color: #0071e3; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .container { max-width: 880px; margin: 0 auto; padding: 40px 20px; }
-    .card { background: #fff; border-radius: 12px; padding: 28px; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 24px; }
-    .card h2 { font-size: 16px; font-weight: 600; margin-bottom: 20px; }
-    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .form-group { display: flex; flex-direction: column; gap: 6px; }
-    .form-group.full { grid-column: 1 / -1; }
-    label { font-size: 13px; font-weight: 500; color: #3a3a3c; }
-    input[type=text], input[type=email], input[type=password] {
-      border: 1px solid #d2d2d7; border-radius: 8px; padding: 9px 12px;
-      font-size: 14px; outline: none; width: 100%; transition: border-color .15s;
+    :root {
+      --blue:       #2563eb;
+      --blue-hover: #1d4ed8;
+      --blue-light: #eff6ff;
+      --blue-ring:  rgba(37,99,235,.18);
+      --green-bg:   #dcfce7; --green-fg: #166534;
+      --red-bg:     #fee2e2; --red-fg:   #991b1b;
+      --amber-bg:   #fef9c3; --amber-fg: #854d0e;
+      --gray-50:  #f9fafb; --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb; --gray-300: #d1d5db;
+      --gray-400: #9ca3af; --gray-500: #6b7280;
+      --gray-700: #374151; --gray-900: #111827;
+      --radius-sm: 6px; --radius: 10px; --radius-lg: 14px;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,.06);
+      --shadow:    0 1px 4px rgba(0,0,0,.08), 0 0 0 1px rgba(0,0,0,.04);
     }
-    input:focus { border-color: #0071e3; box-shadow: 0 0 0 3px rgba(0,113,227,.15); }
-    .hint { font-size: 12px; color: #6e6e73; margin-top: 2px; }
-    .form-footer { margin-top: 20px; display: flex; justify-content: flex-end; align-items: center; gap: 16px; }
-    .btn-primary { background: #0071e3; color: #fff; border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; font-weight: 500; cursor: pointer; }
-    .btn-primary:hover { background: #0077ed; }
-    .btn-secondary { background: #fff; color: #1d1d1f; border: 1px solid #d2d2d7; border-radius: 8px; padding: 10px 20px; font-size: 14px; font-weight: 500; cursor: pointer; }
-    .btn-secondary:hover { background: #f5f5f7; }
-    .btn-remove { background: none; border: 1px solid #e5e5ea; border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; color: #c0392b; }
-    .btn-remove:hover { background: #fff0f0; border-color: #c0392b; }
-    .btn-preview { display: inline-block; background: none; border: 1px solid #d2d2d7; border-radius: 6px; padding: 5px 10px; font-size: 12px; color: #0071e3; text-decoration: none; margin-right: 6px; }
-    .btn-preview:hover { background: #f0f6ff; border-color: #0071e3; }
-    .btn-send { background: none; border: 1px solid #d2d2d7; border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; color: #065f46; margin-right: 6px; }
-    .btn-send:hover { background: #d1fae5; border-color: #065f46; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--gray-50); color: var(--gray-900); min-height: 100vh; -webkit-font-smoothing: antialiased; }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Layout */
+    .container { max-width: 900px; margin: 0 auto; padding: 36px 24px; }
+
+    /* Cards */
+    .card { background: #fff; border-radius: var(--radius-lg); padding: 24px; box-shadow: var(--shadow); margin-bottom: 20px; }
+    .card-title { font-size: 15px; font-weight: 600; color: var(--gray-900); margin-bottom: 18px; }
+
+    /* Section headers */
+    .section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--gray-400); margin-bottom: 12px; }
+
+    /* Forms */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-group.full { grid-column: 1 / -1; }
+    label { font-size: 13px; font-weight: 500; color: var(--gray-700); }
+    input[type=text], input[type=email], input[type=password], input[type=number], select {
+      border: 1.5px solid var(--gray-200); border-radius: var(--radius-sm);
+      padding: 8px 11px; font-size: 14px; font-family: inherit;
+      outline: none; width: 100%; transition: border-color .15s, box-shadow .15s;
+      background: #fff; color: var(--gray-900); appearance: none; -webkit-appearance: none;
+    }
+    select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 30px; }
+    input:focus, select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-ring); }
+    input[readonly] { background: var(--gray-50); color: var(--gray-500); cursor: default; }
+    .hint { font-size: 12px; color: var(--gray-400); }
+    .form-footer { margin-top: 18px; display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
+
+    /* Buttons */
+    .btn-primary {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--blue); color: #fff; border: none;
+      border-radius: var(--radius-sm); padding: 9px 18px;
+      font-size: 14px; font-weight: 500; font-family: inherit;
+      cursor: pointer; transition: background .15s, transform .1s; letter-spacing: -.01em;
+    }
+    .btn-primary:hover { background: var(--blue-hover); }
+    .btn-primary:active { transform: scale(.98); }
+    .btn-secondary {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: #fff; color: var(--gray-700); border: 1.5px solid var(--gray-200);
+      border-radius: var(--radius-sm); padding: 9px 18px;
+      font-size: 14px; font-weight: 500; font-family: inherit;
+      cursor: pointer; transition: background .15s, border-color .15s; letter-spacing: -.01em;
+    }
+    .btn-secondary:hover { background: var(--gray-50); border-color: var(--gray-300); }
+    .btn-sm {
+      display: inline-flex; align-items: center; gap: 4px;
+      border-radius: var(--radius-sm); padding: 5px 11px;
+      font-size: 12px; font-weight: 500; font-family: inherit;
+      cursor: pointer; transition: background .12s, border-color .12s; text-decoration: none;
+    }
+    .btn-outline    { background: #fff; color: var(--gray-700); border: 1.5px solid var(--gray-200); }
+    .btn-outline:hover { background: var(--gray-50); border-color: var(--gray-300); text-decoration: none; }
+    .btn-outline-blue { background: #fff; color: var(--blue); border: 1.5px solid var(--gray-200); }
+    .btn-outline-blue:hover { background: var(--blue-light); border-color: var(--blue); text-decoration: none; }
+    .btn-outline-green { background: #fff; color: var(--green-fg); border: 1.5px solid var(--gray-200); }
+    .btn-outline-green:hover { background: var(--green-bg); border-color: var(--green-fg); }
+    .btn-outline-red   { background: #fff; color: var(--red-fg);   border: 1.5px solid var(--gray-200); }
+    .btn-outline-red:hover   { background: var(--red-bg);   border-color: var(--red-fg);   }
+
+    /* Tables */
     table { width: 100%; border-collapse: collapse; font-size: 14px; }
-    th { text-align: left; font-size: 12px; font-weight: 600; color: #6e6e73; border-bottom: 1px solid #e5e5ea; padding: 8px 12px; }
-    td { padding: 12px; border-bottom: 1px solid #f2f2f7; vertical-align: top; }
+    th { text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--gray-400); border-bottom: 1px solid var(--gray-100); padding: 8px 12px; }
+    td { padding: 11px 12px; border-bottom: 1px solid var(--gray-100); vertical-align: top; }
     tr:last-child td { border-bottom: none; }
-    .mono { font-family: 'SF Mono', Menlo, monospace; }
-    .small { font-size: 12px; color: #6e6e73; }
-    .badge-ok  { background: #d1fae5; color: #065f46; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
-    .badge-err { background: #fee2e2; color: #991b1b; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
-    .badge-pending { background: #f3f4f6; color: #6b7280; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
-    .empty { color: #6e6e73; font-size: 14px; padding: 8px 0; }
-    .flash { border-radius: 8px; padding: 12px 16px; font-size: 14px; margin-bottom: 20px; }
-    .flash-ok  { background: #d1fae5; color: #065f46; }
-    .flash-err { background: #fee2e2; color: #991b1b; }
-    nav { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; background: #fff; border-bottom: 1px solid #e5e5ea; }
-    nav .nav-logo { font-size: 15px; font-weight: 600; color: #1d1d1f; text-decoration: none; }
-    nav .nav-links { display: flex; gap: 20px; align-items: center; font-size: 14px; }
-    .trial-banner { background: #fffbeb; border-bottom: 1px solid #fde68a; padding: 10px 20px; text-align: center; font-size: 13px; color: #92400e; }
+
+    /* Misc */
+    .mono { font-family: 'SF Mono', Menlo, 'Cascadia Code', monospace; }
+    .small { font-size: 12px; color: var(--gray-500); }
+    .muted { color: var(--gray-400); }
+
+    /* Badges */
+    .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 20px; }
+    .badge::before { content: ''; width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+    .badge-ok      { background: var(--green-bg); color: var(--green-fg); }
+    .badge-ok::before { background: var(--green-fg); }
+    .badge-err     { background: var(--red-bg);   color: var(--red-fg);   }
+    .badge-err::before { background: var(--red-fg); }
+    .badge-pending { background: var(--gray-100); color: var(--gray-500); }
+    .badge-pending::before { background: var(--gray-400); }
+
+    /* Flash messages */
+    .flash { display: flex; align-items: flex-start; gap: 10px; border-radius: var(--radius); padding: 12px 16px; font-size: 14px; margin-bottom: 20px; }
+    .flash-ok  { background: var(--green-bg); color: var(--green-fg); border: 1px solid #bbf7d0; }
+    .flash-err { background: var(--red-bg);   color: var(--red-fg);   border: 1px solid #fecaca; }
+
+    /* Nav */
+    .topnav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 24px; background: #fff; border-bottom: 1px solid var(--gray-200);
+      height: 56px; position: sticky; top: 0; z-index: 100;
+      box-shadow: 0 1px 3px rgba(0,0,0,.05);
+    }
+    .nav-brand { display: flex; align-items: center; gap: 9px; text-decoration: none; }
+    .nav-brand-icon {
+      width: 30px; height: 30px; border-radius: 8px;
+      background: var(--blue); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; font-weight: 700; letter-spacing: -.02em; flex-shrink: 0;
+    }
+    .nav-brand-name { font-size: 15px; font-weight: 600; color: var(--gray-900); }
+    .nav-links { display: flex; gap: 4px; align-items: center; }
+    .nav-link { font-size: 14px; font-weight: 500; color: var(--gray-500); padding: 6px 10px; border-radius: var(--radius-sm); text-decoration: none; transition: color .12s, background .12s; }
+    .nav-link:hover { color: var(--gray-900); background: var(--gray-100); text-decoration: none; }
+    .nav-link.active { color: var(--blue); background: var(--blue-light); }
+    .nav-divider { width: 1px; height: 20px; background: var(--gray-200); margin: 0 6px; }
+    .nav-email { font-size: 13px; color: var(--gray-400); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* Trial banner */
+    .trial-banner { background: var(--amber-bg); border-bottom: 1px solid #fde68a; padding: 9px 24px; text-align: center; font-size: 13px; color: var(--amber-fg); }
+    .trial-banner a { color: var(--amber-fg); font-weight: 600; text-decoration: underline; }
+
+    /* Tenant card layout */
+    .tenant-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .tenant-name { font-size: 15px; font-weight: 600; color: var(--gray-900); }
+    .tenant-meta { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
+    .tenant-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; flex-shrink: 0; }
+
+    /* Settings panel */
+    .settings-panel { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--gray-100); }
+    .settings-toggle {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 13px; font-weight: 500; color: var(--gray-500);
+      cursor: pointer; list-style: none; user-select: none;
+    }
+    .settings-toggle::-webkit-details-marker { display: none; }
+    .settings-toggle::before { content: '›'; font-size: 16px; transition: transform .2s; display: inline-block; }
+    details[open] .settings-toggle::before { transform: rotate(90deg); }
+    .settings-toggle:hover { color: var(--gray-900); }
+
+    /* Plan cards */
+    .plan-card {
+      border: 1.5px solid var(--gray-200); border-radius: var(--radius-lg);
+      padding: 24px; flex: 1; min-width: 190px;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .plan-card:hover { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-ring); }
+    .plan-card.featured { border-color: var(--blue); }
+
+    /* Auth wrapper */
+    .auth-wrap { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
+    .auth-box { width: 100%; max-width: 400px; }
+    .auth-logo { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 28px; }
+    .auth-logo-icon { width: 38px; height: 38px; border-radius: 10px; background: var(--blue); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; }
+    .auth-logo-name { font-size: 20px; font-weight: 700; color: var(--gray-900); }
+
+    /* Empty state */
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--gray-400); }
+    .empty-state p { font-size: 14px; }
+
+    /* Divider */
+    .divider { border: none; border-top: 1px solid var(--gray-100); margin: 16px 0; }
   </style>`;
 }
 
-function navbar(user) {
+function navbar(user, activePage) {
   return `
-  <nav>
-    <a class="nav-logo" href="/dashboard">HubSpot Digest</a>
+  <nav class="topnav">
+    <a class="nav-brand" href="/dashboard">
+      <div class="nav-brand-icon">H</div>
+      <span class="nav-brand-name">HubSpot Digest</span>
+    </a>
     <div class="nav-links">
-      <a href="/dashboard">Dashboard</a>
-      <a href="/billing">Billing</a>
-      <span style="color:#6e6e73">${escHtml(user.email)}</span>
-      <form method="POST" action="/logout" style="display:inline;">
-        <button type="submit" class="btn-secondary" style="padding:6px 14px;font-size:13px;">Log out</button>
+      <a href="/dashboard" class="nav-link${activePage === 'dashboard' ? ' active' : ''}">Dashboard</a>
+      <a href="/billing"   class="nav-link${activePage === 'billing'   ? ' active' : ''}">Billing</a>
+      <div class="nav-divider"></div>
+      <span class="nav-email" title="${escHtml(user.email)}">${escHtml(user.email)}</span>
+      <form method="POST" action="/logout" style="display:inline;margin-left:4px;">
+        <button type="submit" class="btn-secondary" style="padding:5px 12px;font-size:13px;">Log out</button>
       </form>
     </div>
   </nav>`;
@@ -143,32 +278,36 @@ function navbar(user) {
 
 function signupPage(flash) {
   const flashHtml = flash
-    ? `<div class="flash flash-err">${escHtml(flash)}</div>`
+    ? `<div class="flash flash-err"><span>⚠</span>${escHtml(flash)}</div>`
     : '';
   return `${baseHead('Sign Up')}
 </head>
 <body>
-  <div style="max-width:400px;margin:80px auto;padding:0 20px;">
-    <div style="text-align:center;margin-bottom:32px;">
-      <h1 style="font-size:22px;font-weight:700;">HubSpot Digest</h1>
-      <p style="color:#6e6e73;font-size:14px;margin-top:6px;">Start your 14-day free trial</p>
+  <div class="auth-wrap">
+    <div class="auth-box">
+      <div class="auth-logo">
+        <div class="auth-logo-icon">H</div>
+        <span class="auth-logo-name">HubSpot Digest</span>
+      </div>
+      <div style="text-align:center;margin-bottom:24px;">
+        <p style="color:var(--gray-500);font-size:14px;">Start your 14-day free trial — no credit card required</p>
+      </div>
+      ${flashHtml}
+      <div class="card" style="padding:28px;">
+        <form method="POST" action="/signup">
+          <div class="form-group" style="margin-bottom:14px;">
+            <label for="email">Email address</label>
+            <input type="email" id="email" name="email" required autocomplete="email" placeholder="you@company.com">
+          </div>
+          <div class="form-group" style="margin-bottom:20px;">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required autocomplete="new-password" minlength="8" placeholder="Min. 8 characters">
+          </div>
+          <button type="submit" class="btn-primary" style="width:100%;">Create free account</button>
+        </form>
+      </div>
+      <p style="text-align:center;font-size:13px;color:var(--gray-400);margin-top:16px;">Already have an account? <a href="/login">Log in</a></p>
     </div>
-    ${flashHtml}
-    <div class="card">
-      <form method="POST" action="/signup">
-        <div class="form-group" style="margin-bottom:16px;">
-          <label for="email">Email</label>
-          <input type="email" id="email" name="email" required autocomplete="email">
-        </div>
-        <div class="form-group" style="margin-bottom:16px;">
-          <label for="password">Password</label>
-          <input type="password" id="password" name="password" required autocomplete="new-password" minlength="8">
-          <span class="hint">Minimum 8 characters</span>
-        </div>
-        <button type="submit" class="btn-primary" style="width:100%;justify-content:center;">Create account</button>
-      </form>
-    </div>
-    <p style="text-align:center;font-size:13px;color:#6e6e73;">Already have an account? <a href="/login">Log in</a></p>
   </div>
 </body>
 </html>`;
@@ -176,31 +315,36 @@ function signupPage(flash) {
 
 function loginPage(flash) {
   const flashHtml = flash
-    ? `<div class="flash flash-err">${escHtml(flash)}</div>`
+    ? `<div class="flash flash-err"><span>⚠</span>${escHtml(flash)}</div>`
     : '';
   return `${baseHead('Log In')}
 </head>
 <body>
-  <div style="max-width:400px;margin:80px auto;padding:0 20px;">
-    <div style="text-align:center;margin-bottom:32px;">
-      <h1 style="font-size:22px;font-weight:700;">HubSpot Digest</h1>
-      <p style="color:#6e6e73;font-size:14px;margin-top:6px;">Sign in to your account</p>
+  <div class="auth-wrap">
+    <div class="auth-box">
+      <div class="auth-logo">
+        <div class="auth-logo-icon">H</div>
+        <span class="auth-logo-name">HubSpot Digest</span>
+      </div>
+      <div style="text-align:center;margin-bottom:24px;">
+        <p style="color:var(--gray-500);font-size:14px;">Sign in to your account</p>
+      </div>
+      ${flashHtml}
+      <div class="card" style="padding:28px;">
+        <form method="POST" action="/login">
+          <div class="form-group" style="margin-bottom:14px;">
+            <label for="email">Email address</label>
+            <input type="email" id="email" name="email" required autocomplete="email" placeholder="you@company.com">
+          </div>
+          <div class="form-group" style="margin-bottom:20px;">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required autocomplete="current-password" placeholder="Your password">
+          </div>
+          <button type="submit" class="btn-primary" style="width:100%;">Log in</button>
+        </form>
+      </div>
+      <p style="text-align:center;font-size:13px;color:var(--gray-400);margin-top:16px;">Don't have an account? <a href="/signup">Start free trial</a></p>
     </div>
-    ${flashHtml}
-    <div class="card">
-      <form method="POST" action="/login">
-        <div class="form-group" style="margin-bottom:16px;">
-          <label for="email">Email</label>
-          <input type="email" id="email" name="email" required autocomplete="email">
-        </div>
-        <div class="form-group" style="margin-bottom:16px;">
-          <label for="password">Password</label>
-          <input type="password" id="password" name="password" required autocomplete="current-password">
-        </div>
-        <button type="submit" class="btn-primary" style="width:100%;justify-content:center;">Log in</button>
-      </form>
-    </div>
-    <p style="text-align:center;font-size:13px;color:#6e6e73;">Don't have an account? <a href="/signup">Sign up free</a></p>
   </div>
 </body>
 </html>`;
@@ -225,131 +369,147 @@ function dashboardPage(user, tenants, flash) {
 
   const tenantCards = tenants.map((t) => {
     const emails = t.recipient_emails.split(',').map((e) => e.trim()).join(', ');
-    const status = t.last_digest_status
-      ? `<span class="${t.last_digest_status === 'success' ? 'badge-ok' : 'badge-err'}">${t.last_digest_status === 'success' ? 'Sent' : 'Error'}</span>`
-      : '<span class="badge-pending">Pending</span>';
+    const statusBadge = t.last_digest_status
+      ? (t.last_digest_status === 'success'
+          ? '<span class="badge badge-ok">Sent</span>'
+          : '<span class="badge badge-err">Error</span>')
+      : '<span class="badge badge-pending">Pending</span>';
     const lastRun = t.last_digest_at
       ? new Date(t.last_digest_at + ' UTC').toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
-      : '—';
+      : 'Never';
     const freq = t.digest_frequency || 'daily';
     const hour = Number(t.digest_hour ?? 7);
     const tz = t.digest_timezone || 'America/New_York';
     const period = Number(t.report_period_days) || 1;
     const day = Number(t.digest_day ?? 1);
-    const hourLabel = `${String(hour).padStart(2,'0')}:00`;
-    const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-    const scheduleLabel = freq === 'weekly' ? `Weekly on ${DAYS[day]} at ${hourLabel}` : `Daily at ${hourLabel}`;
-    const periodLabel = period === 1 ? 'Yesterday' : `Last ${period} days`;
+    const ampm = hour >= 12 ? 'pm' : 'am';
+    const h12 = hour % 12 || 12;
+    const hourLabel = `${h12}:00 ${ampm}`;
+    const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const DAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const scheduleLabel = freq === 'weekly' ? `Weekly · ${DAYS[day]} at ${hourLabel}` : `Daily · ${hourLabel}`;
+    const periodLabel = period === 1 ? '1-day report' : `${period}-day report`;
 
-    const dayOptions = DAYS.map((d, i) =>
+    const dayOptions = DAYS_SHORT.map((d, i) =>
       `<option value="${i}"${i === day ? ' selected' : ''}>${d}</option>`
     ).join('');
 
+    const hourOptions = Array.from({length: 24}, (_, i) => {
+      const ap = i >= 12 ? 'pm' : 'am';
+      const h = i % 12 || 12;
+      const label = `${h}:00 ${ap}`;
+      return `<option value="${i}"${i === hour ? ' selected' : ''}>${label}</option>`;
+    }).join('');
+
     return `
       <div class="card" style="margin-bottom:16px;">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+        <div class="tenant-header">
           <div style="flex:1;min-width:200px;">
-            <strong style="font-size:15px;">${escHtml(t.name)}</strong>
-            <div class="small" style="margin-top:4px;">${escHtml(emails)}</div>
-            <div class="small" style="margin-top:2px;">Key: ${maskKey(t.hubspot_api_key)}</div>
-            <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-              ${status}
+            <div class="tenant-name">${escHtml(t.name)}</div>
+            <div class="tenant-meta">
+              <span class="small">${escHtml(emails)}</span>
+              <span class="small muted mono" style="font-size:11px;">Key: ${maskKey(t.hubspot_api_key)}</span>
+            </div>
+            <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              ${statusBadge}
               <span class="small">Last run: ${lastRun}</span>
             </div>
-            <div class="small" style="margin-top:6px;color:#6e6e73;">
-              ${escHtml(scheduleLabel)} &middot; ${escHtml(periodLabel)} &middot; ${escHtml(tz)}
+            <div style="margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+              <span style="font-size:12px;background:var(--gray-100);color:var(--gray-500);border-radius:4px;padding:2px 7px;">${escHtml(scheduleLabel)}</span>
+              <span style="font-size:12px;background:var(--gray-100);color:var(--gray-500);border-radius:4px;padding:2px 7px;">${escHtml(periodLabel)}</span>
+              <span style="font-size:12px;background:var(--gray-100);color:var(--gray-500);border-radius:4px;padding:2px 7px;" title="Auto-synced from HubSpot">${escHtml(tz)}</span>
             </div>
           </div>
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-            <a href="/dashboard/preview/${t.id}" target="_blank" class="btn-preview">Preview</a>
+          <div class="tenant-actions">
+            <a href="/dashboard/preview/${t.id}" target="_blank" class="btn-sm btn-outline-blue">Preview</a>
             <form method="POST" action="/dashboard/tenants/${t.id}/send" onsubmit="return confirm('Send digest now for ${escHtml(t.name)}?')" style="display:inline;">
-              <button type="submit" class="btn-send">Send Now</button>
+              <button type="submit" class="btn-sm btn-outline-green">Send now</button>
             </form>
             <form method="POST" action="/dashboard/tenants/${t.id}/delete" onsubmit="return confirm('Remove ${escHtml(t.name)}?')" style="display:inline;">
-              <button type="submit" class="btn-remove">Remove</button>
+              <button type="submit" class="btn-sm btn-outline-red">Remove</button>
             </form>
           </div>
         </div>
 
-        <details style="margin-top:16px;">
-          <summary style="font-size:13px;font-weight:500;cursor:pointer;color:#0071e3;">Schedule &amp; reporting settings</summary>
-          <form method="POST" action="/dashboard/tenants/${t.id}/settings" style="margin-top:12px;">
-            <div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;">
-              <div class="form-group">
-                <label>Frequency</label>
-                <select name="digest_frequency" style="border:1px solid #d2d2d7;border-radius:8px;padding:9px 12px;font-size:14px;width:100%;">
-                  <option value="daily"${freq === 'daily' ? ' selected' : ''}>Daily</option>
-                  <option value="weekly"${freq === 'weekly' ? ' selected' : ''}>Weekly</option>
-                </select>
+        <div class="settings-panel">
+          <details>
+            <summary class="settings-toggle">Schedule &amp; reporting settings</summary>
+            <form method="POST" action="/dashboard/tenants/${t.id}/settings" style="margin-top:14px;">
+              <div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;">
+                <div class="form-group">
+                  <label>Frequency</label>
+                  <select name="digest_frequency">
+                    <option value="daily"${freq === 'daily' ? ' selected' : ''}>Daily</option>
+                    <option value="weekly"${freq === 'weekly' ? ' selected' : ''}>Weekly</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Day <span class="muted" style="font-size:11px;font-weight:400;">(weekly)</span></label>
+                  <select name="digest_day">${dayOptions}</select>
+                </div>
+                <div class="form-group">
+                  <label>Send time</label>
+                  <select name="digest_hour">${hourOptions}</select>
+                </div>
+                <div class="form-group">
+                  <label>Reporting period</label>
+                  <select name="report_period_days">
+                    <option value="1"${period === 1 ? ' selected' : ''}>Yesterday (1 day)</option>
+                    <option value="7"${period === 7 ? ' selected' : ''}>Last 7 days</option>
+                    <option value="30"${period === 30 ? ' selected' : ''}>Last 30 days</option>
+                  </select>
+                </div>
               </div>
-              <div class="form-group">
-                <label>Day (weekly only)</label>
-                <select name="digest_day" style="border:1px solid #d2d2d7;border-radius:8px;padding:9px 12px;font-size:14px;width:100%;">
-                  ${dayOptions}
-                </select>
+              <p class="hint" style="margin-top:10px;">Send time is in your HubSpot portal timezone (${escHtml(tz)}), synced automatically.</p>
+              <div style="margin-top:12px;">
+                <button type="submit" class="btn-primary" style="padding:8px 16px;font-size:13px;">Save settings</button>
               </div>
-              <div class="form-group">
-                <label>Send hour (0–23)</label>
-                <input type="number" name="digest_hour" min="0" max="23" value="${hour}" style="border:1px solid #d2d2d7;border-radius:8px;padding:9px 12px;font-size:14px;width:100%;">
-                <span class="hint">In the timezone below</span>
-              </div>
-              <div class="form-group">
-                <label>Reporting period</label>
-                <select name="report_period_days" style="border:1px solid #d2d2d7;border-radius:8px;padding:9px 12px;font-size:14px;width:100%;">
-                  <option value="1"${period === 1 ? ' selected' : ''}>Yesterday (1 day)</option>
-                  <option value="7"${period === 7 ? ' selected' : ''}>Last 7 days</option>
-                  <option value="30"${period === 30 ? ' selected' : ''}>Last 30 days</option>
-                </select>
-              </div>
-              <div class="form-group" style="grid-column:1/-1;">
-                <span class="hint">Timezone is synced automatically from your HubSpot portal settings (currently: ${escHtml(tz)})</span>
-              </div>
-            </div>
-            <div style="margin-top:12px;">
-              <button type="submit" class="btn-primary" style="padding:8px 18px;font-size:13px;">Save Settings</button>
-            </div>
-          </form>
-        </details>
+            </form>
+          </details>
+        </div>
       </div>`;
   }).join('');
 
   const tenantsSection = tenants.length > 0 ? tenantCards
-    : '<p class="empty">No companies added yet. Add your first one below.</p>';
+    : `<div class="card"><div class="empty-state"><p>No companies yet. Add your first one below.</p></div></div>`;
 
   return `${baseHead('Dashboard')}
 </head>
 <body>
-  ${navbar(user)}
+  ${navbar(user, 'dashboard')}
   ${trialBanner}
   <div class="container">
     ${flashHtml}
 
-    <div style="margin-bottom:24px;">
-      <h2 style="font-size:16px;font-weight:600;margin-bottom:16px;">Your Companies (${tenants.length})</h2>
+    <div style="margin-bottom:28px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h2 style="font-size:18px;font-weight:700;">Your Companies</h2>
+        ${tenants.length > 0 ? `<span class="badge badge-pending" style="font-size:12px;">${tenants.length} connected</span>` : ''}
+      </div>
       ${tenantsSection}
     </div>
 
     <div class="card">
-      <h2>Add a Company</h2>
+      <div class="card-title">Connect a Company</div>
       <form method="POST" action="/dashboard/tenants">
         <div class="form-grid">
           <div class="form-group">
-            <label for="name">Company Name</label>
+            <label for="name">Company name</label>
             <input type="text" id="name" name="name" placeholder="Acme Corp" required>
           </div>
           <div class="form-group">
-            <label for="recipient_emails">Recipient Email(s)</label>
+            <label for="recipient_emails">Recipient email(s)</label>
             <input type="text" id="recipient_emails" name="recipient_emails" placeholder="ceo@acme.com, ops@acme.com" required>
             <span class="hint">Separate multiple addresses with commas</span>
           </div>
           <div class="form-group full">
             <label for="hubspot_api_key">HubSpot Private App Access Token</label>
             <input type="password" id="hubspot_api_key" name="hubspot_api_key" placeholder="pat-na1-••••••••" required>
-            <span class="hint">Found in HubSpot → Settings → Integrations → Private Apps</span>
+            <span class="hint">HubSpot → Settings → Integrations → Private Apps</span>
           </div>
         </div>
         <div class="form-footer">
-          <button type="submit" class="btn-primary">Add Company</button>
+          <button type="submit" class="btn-primary">Connect company</button>
         </div>
       </form>
     </div>
@@ -365,33 +525,54 @@ function billingPage(user, flash, expired, livePrices = {}) {
   const status = user.subscription_status;
 
   const flashHtml = flash
-    ? `<div class="flash ${flash.startsWith('✓') ? 'flash-ok' : 'flash-err'}">${escHtml(flash)}</div>`
+    ? `<div class="flash ${flash.startsWith('✓') ? 'flash-ok' : 'flash-err'}"><span>${flash.startsWith('✓') ? '✓' : '⚠'}</span>${escHtml(flash)}</div>`
     : '';
 
   const expiredBanner = expired
-    ? `<div class="flash flash-err" style="margin-bottom:24px;">Your trial has expired. Choose a plan below to continue.</div>`
+    ? `<div class="flash flash-err"><span>⚠</span>Your trial has expired. Choose a plan below to continue.</div>`
     : '';
 
   const statusBadge = {
-    trial: `<span class="badge-pending">Trial — ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left</span>`,
-    active: '<span class="badge-ok">Active</span>',
-    lifetime: '<span class="badge-ok">Lifetime</span>',
-    cancelled: '<span class="badge-err">Cancelled</span>',
-  }[status] || `<span class="badge-pending">${escHtml(status)}</span>`;
+    trial: `<span class="badge badge-pending">Trial · ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left</span>`,
+    active:    '<span class="badge badge-ok">Active</span>',
+    lifetime:  '<span class="badge badge-ok">Lifetime access</span>',
+    cancelled: '<span class="badge badge-err">Cancelled</span>',
+  }[status] || `<span class="badge badge-pending">${escHtml(status)}</span>`;
+
+  const features = [
+    'Unlimited HubSpot connections',
+    'Daily or weekly digest emails',
+    'Customisable reporting periods',
+    'All activity types (tasks, calls, deals…)',
+  ];
+  const featuresHtml = features.map(f =>
+    `<li style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--gray-700);padding:4px 0;">
+      <span style="color:var(--green-fg);font-size:14px;">✓</span>${f}
+    </li>`
+  ).join('');
 
   const isSubscribed = status === 'active' || status === 'lifetime';
   const planCards = isSubscribed ? '' : Object.entries(PLANS)
     .map(([key, plan]) => {
       const displayPrice = livePrices[key] || '—';
-      const badge = plan.badge ? `<span style="background:#0071e3;color:#fff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;margin-left:8px;">${escHtml(plan.badge)}</span>` : '';
+      const isFeatured = !!plan.badge;
+      const badgeHtml = plan.badge
+        ? `<span style="background:var(--blue);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.03em;text-transform:uppercase;">${escHtml(plan.badge)}</span>`
+        : '';
       return `
-        <div style="border:1px solid #e5e5ea;border-radius:10px;padding:20px;flex:1;min-width:200px;">
-          <div style="font-size:15px;font-weight:600;margin-bottom:4px;">${escHtml(plan.label)}${badge}</div>
-          <div style="font-size:28px;font-weight:700;margin:8px 0;">${escHtml(displayPrice)} <span style="font-size:14px;font-weight:400;color:#6e6e73;">${escHtml(plan.period)}</span></div>
-          <div style="font-size:13px;color:#6e6e73;margin-bottom:20px;">${escHtml(plan.description)}</div>
+        <div class="plan-card${isFeatured ? ' featured' : ''}">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <span style="font-size:14px;font-weight:600;color:var(--gray-900);">${escHtml(plan.label)}</span>
+            ${badgeHtml}
+          </div>
+          <div style="margin-bottom:4px;">
+            <span style="font-size:32px;font-weight:700;letter-spacing:-.02em;">${escHtml(displayPrice)}</span>
+            <span style="font-size:13px;color:var(--gray-400);margin-left:2px;">${escHtml(plan.period)}</span>
+          </div>
+          <p style="font-size:13px;color:var(--gray-500);margin-bottom:20px;line-height:1.5;">${escHtml(plan.description)}</p>
           <form method="POST" action="/billing/checkout">
             <input type="hidden" name="plan" value="${escHtml(key)}">
-            <button type="submit" class="btn-primary" style="width:100%;">Choose ${escHtml(plan.label)}</button>
+            <button type="submit" class="btn-primary" style="width:100%;${isFeatured ? '' : 'background:var(--gray-900);'}">Get started</button>
           </form>
         </div>`;
     })
@@ -399,23 +580,28 @@ function billingPage(user, flash, expired, livePrices = {}) {
 
   const portalSection = (status === 'active' || status === 'lifetime') && user.paypal_subscription_id
     ? `<div class="card">
-        <h2>Manage Subscription</h2>
-        <p style="font-size:14px;color:#6e6e73;margin-bottom:16px;">Update payment method or cancel your subscription via PayPal.</p>
-        <a href="/billing/portal" class="btn-secondary">Manage on PayPal</a>
+        <div class="card-title">Manage Subscription</div>
+        <p style="font-size:14px;color:var(--gray-500);margin-bottom:16px;">Update your payment method or cancel via PayPal's autopay manager.</p>
+        <a href="/billing/portal" class="btn-secondary" style="display:inline-flex;align-items:center;gap:6px;">
+          Manage on PayPal
+          <span style="font-size:12px;opacity:.6;">↗</span>
+        </a>
        </div>`
     : '';
 
   return `${baseHead('Billing')}
 </head>
 <body>
-  ${navbar(user)}
-  <div class="container">
+  ${navbar(user, 'billing')}
+  <div class="container" style="max-width:780px;">
     ${expiredBanner}
     ${flashHtml}
 
-    <div class="card">
-      <h2>Current Plan</h2>
-      <p style="font-size:14px;color:#6e6e73;margin-bottom:8px;">Account: ${escHtml(user.email)}</p>
+    <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+      <div>
+        <div class="card-title" style="margin-bottom:4px;">Current plan</div>
+        <p style="font-size:13px;color:var(--gray-400);">${escHtml(user.email)}</p>
+      </div>
       <div>${statusBadge}</div>
     </div>
 
@@ -423,10 +609,14 @@ function billingPage(user, flash, expired, livePrices = {}) {
 
     ${!isSubscribed ? `
     <div class="card">
-      <h2>Choose a Plan</h2>
-      <div style="display:flex;gap:16px;flex-wrap:wrap;">
+      <div class="card-title">Choose a plan</div>
+      <ul style="list-style:none;margin-bottom:24px;padding:0;">${featuresHtml}</ul>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;">
         ${planCards}
       </div>
+      <p style="font-size:12px;color:var(--gray-400);margin-top:16px;text-align:center;">
+        Payments processed securely by PayPal. Cancel any time.
+      </p>
     </div>` : ''}
   </div>
 </body>
