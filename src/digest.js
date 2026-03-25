@@ -81,7 +81,7 @@ async function generateDigest(options = {}) {
 }
 
 async function _generateDigest(options = {}) {
-  const { isTest = false, skipEmail = false, hubspotApiKey, recipients: recipientOverride, previewUrl, reportPeriodDays = 1 } = options;
+  const { isTest = false, skipEmail = false, hubspotApiKey, recipients: recipientOverride, previewUrl, reportPeriodDays = 1, tenantId } = options;
 
   console.log(`\n${'='.repeat(60)}`);
   console.log(`HubSpot Activity Digest — ${new Date().toISOString()}`);
@@ -90,12 +90,17 @@ async function _generateDigest(options = {}) {
 
   const now = new Date();
 
-  // Fetch account timezone before anything else
+  // Fetch account timezone before anything else and cache it on the tenant record
+  // so the scheduler always uses the same timezone as HubSpot.
   let accountTimezone = 'America/New_York';
   try {
     const info = await fetchAccountInfo();
     accountTimezone = info.timeZone;
     console.log(`Account timezone: ${accountTimezone}`);
+    if (tenantId) {
+      const { updateTenantTimezone } = require('./db');
+      updateTenantTimezone(tenantId, accountTimezone).catch(() => {});
+    }
   } catch (err) {
     console.warn(`Could not fetch account timezone, defaulting to ${accountTimezone}:`, err.message);
   }
@@ -324,6 +329,7 @@ async function runAllTenants({ respectSchedule = false } = {}) {
         recipients: tenant.recipient_emails,
         previewUrl: appUrl ? `${appUrl}/dashboard/preview/${tenant.id}` : undefined,
         reportPeriodDays: Number(tenant.report_period_days) || 1,
+        tenantId: tenant.id,
       });
       await updateTenantDigestStatus(tenant.id, 'success');
     } catch (err) {

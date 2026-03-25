@@ -222,16 +222,6 @@ function dashboardPage(user, tenants, flash) {
     ? `<div class="flash ${flash.startsWith('✓') || flash.startsWith('Sending') ? 'flash-ok' : 'flash-err'}">${escHtml(flash)}</div>`
     : '';
 
-  const TIMEZONES = [
-    'America/New_York','America/Chicago','America/Denver','America/Los_Angeles',
-    'America/Toronto','America/Vancouver','America/Sao_Paulo','America/Mexico_City',
-    'Europe/London','Europe/Paris','Europe/Berlin','Europe/Madrid','Europe/Rome',
-    'Europe/Amsterdam','Europe/Stockholm','Europe/Zurich','Europe/Warsaw',
-    'Asia/Dubai','Asia/Kolkata','Asia/Singapore','Asia/Tokyo','Asia/Seoul',
-    'Asia/Shanghai','Asia/Bangkok','Asia/Jakarta',
-    'Australia/Sydney','Australia/Melbourne','Australia/Brisbane','Pacific/Auckland',
-    'UTC',
-  ];
 
   const tenantCards = tenants.map((t) => {
     const emails = t.recipient_emails.split(',').map((e) => e.trim()).join(', ');
@@ -250,10 +240,6 @@ function dashboardPage(user, tenants, flash) {
     const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
     const scheduleLabel = freq === 'weekly' ? `Weekly on ${DAYS[day]} at ${hourLabel}` : `Daily at ${hourLabel}`;
     const periodLabel = period === 1 ? 'Yesterday' : `Last ${period} days`;
-
-    const tzOptions = TIMEZONES.map((z) =>
-      `<option value="${z}"${z === tz ? ' selected' : ''}>${z}</option>`
-    ).join('');
 
     const dayOptions = DAYS.map((d, i) =>
       `<option value="${i}"${i === day ? ' selected' : ''}>${d}</option>`
@@ -316,10 +302,7 @@ function dashboardPage(user, tenants, flash) {
                 </select>
               </div>
               <div class="form-group" style="grid-column:1/-1;">
-                <label>Timezone</label>
-                <select name="digest_timezone" style="border:1px solid #d2d2d7;border-radius:8px;padding:9px 12px;font-size:14px;width:100%;">
-                  ${tzOptions}
-                </select>
+                <span class="hint">Timezone is synced automatically from your HubSpot portal settings (currently: ${escHtml(tz)})</span>
               </div>
             </div>
             <div style="margin-top:12px;">
@@ -549,7 +532,7 @@ app.post('/dashboard/tenants/:id/settings', requireAuth, loadUser, async (req, r
   const tenant = await getTenantForUser(Number(req.params.id), req.user.id);
   if (!tenant) return res.redirect('/dashboard');
 
-  const { digest_frequency, digest_day, digest_hour, digest_timezone, report_period_days } = req.body;
+  const { digest_frequency, digest_day, digest_hour, report_period_days } = req.body;
 
   const validFreq = ['daily', 'weekly'].includes(digest_frequency) ? digest_frequency : 'daily';
   const validDay = Math.max(0, Math.min(6, parseInt(digest_day) || 1));
@@ -561,7 +544,7 @@ app.post('/dashboard/tenants/:id/settings', requireAuth, loadUser, async (req, r
       digestFrequency: validFreq,
       digestDay: validDay,
       digestHour: validHour,
-      digestTimezone: digest_timezone || 'America/New_York',
+      digestTimezone: tenant.digest_timezone || 'America/New_York', // preserved, updated automatically by HubSpot sync
       reportPeriodDays: validPeriod,
     });
     const flash = encodeURIComponent(`✓ Settings saved for ${tenant.name}.`);
@@ -587,6 +570,7 @@ app.post('/dashboard/tenants/:id/send', requireAuth, loadUser, requireSubscripti
       recipients: tenant.recipient_emails,
       previewUrl: appUrl ? `${appUrl}/dashboard/preview/${tenant.id}` : undefined,
       reportPeriodDays: Number(tenant.report_period_days) || 1,
+      tenantId: tenant.id,
     }))
     .then(() => updateTenantDigestStatus(tenant.id, 'success'))
     .then(() => console.log(`[send-now] Digest sent for tenant: ${tenant.name}`))

@@ -184,6 +184,14 @@ async function updateTenantDigestStatus(id, status) {
   });
 }
 
+async function updateTenantTimezone(id, timezone) {
+  const db = getClient();
+  await db.execute({
+    sql: 'UPDATE tenants SET digest_timezone = ? WHERE id = ?',
+    args: [timezone, id],
+  });
+}
+
 async function updateTenantSettings(id, { digestFrequency, digestDay, digestHour, digestTimezone, reportPeriodDays }) {
   const db = getClient();
   await db.execute({
@@ -213,5 +221,6 @@ module.exports = {
   createTenant,
   deleteTenant,
   updateTenantDigestStatus,
+  updateTenantTimezone,
   updateTenantSettings,
 };
