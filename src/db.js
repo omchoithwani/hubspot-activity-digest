@@ -57,6 +57,18 @@ async function ensureSchema() {
     // Column already exists — safe to ignore
   }
 
+  // Migrations: per-tenant digest scheduling and reporting period
+  const tenantMigrations = [
+    "ALTER TABLE tenants ADD COLUMN digest_frequency TEXT NOT NULL DEFAULT 'daily'",
+    'ALTER TABLE tenants ADD COLUMN digest_day INTEGER NOT NULL DEFAULT 1',
+    'ALTER TABLE tenants ADD COLUMN digest_hour INTEGER NOT NULL DEFAULT 7',
+    "ALTER TABLE tenants ADD COLUMN digest_timezone TEXT NOT NULL DEFAULT 'America/New_York'",
+    'ALTER TABLE tenants ADD COLUMN report_period_days INTEGER NOT NULL DEFAULT 1',
+  ];
+  for (const sql of tenantMigrations) {
+    try { await db.execute(sql); } catch (_) { /* column exists */ }
+  }
+
   schemaReady = true;
 }
 
@@ -172,6 +184,20 @@ async function updateTenantDigestStatus(id, status) {
   });
 }
 
+async function updateTenantSettings(id, { digestFrequency, digestDay, digestHour, digestTimezone, reportPeriodDays }) {
+  const db = getClient();
+  await db.execute({
+    sql: `UPDATE tenants SET
+      digest_frequency = ?,
+      digest_day = ?,
+      digest_hour = ?,
+      digest_timezone = ?,
+      report_period_days = ?
+      WHERE id = ?`,
+    args: [digestFrequency, digestDay, digestHour, digestTimezone, reportPeriodDays, id],
+  });
+}
+
 module.exports = {
   // Users
   createUser,
@@ -187,4 +213,5 @@ module.exports = {
   createTenant,
   deleteTenant,
   updateTenantDigestStatus,
+  updateTenantSettings,
 };

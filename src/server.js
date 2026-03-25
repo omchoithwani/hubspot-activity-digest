@@ -14,6 +14,7 @@ const {
   createTenant,
   deleteTenant,
   updateTenantDigestStatus,
+  updateTenantSettings,
   createUser,
   getUserByEmail,
 } = require('./db');
@@ -221,23 +222,59 @@ function dashboardPage(user, tenants, flash) {
     ? `<div class="flash ${flash.startsWith('✓') || flash.startsWith('Sending') ? 'flash-ok' : 'flash-err'}">${escHtml(flash)}</div>`
     : '';
 
-  const rows = tenants
-    .map((t) => {
-      const emails = t.recipient_emails.split(',').map((e) => e.trim()).join('<br>');
-      const status = t.last_digest_status
-        ? `<span class="${t.last_digest_status === 'success' ? 'badge-ok' : 'badge-err'}">${t.last_digest_status === 'success' ? 'Sent' : 'Error'}</span>`
-        : '<span class="badge-pending">Pending</span>';
-      const lastRun = t.last_digest_at
-        ? new Date(t.last_digest_at + ' UTC').toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
-        : '—';
-      return `
-        <tr>
-          <td><strong>${escHtml(t.name)}</strong></td>
-          <td class="mono small">${escHtml(emails)}</td>
-          <td class="mono small">${maskKey(t.hubspot_api_key)}</td>
-          <td>${status}</td>
-          <td class="small">${lastRun}</td>
-          <td style="white-space:nowrap;">
+  const TIMEZONES = [
+    'America/New_York','America/Chicago','America/Denver','America/Los_Angeles',
+    'America/Toronto','America/Vancouver','America/Sao_Paulo','America/Mexico_City',
+    'Europe/London','Europe/Paris','Europe/Berlin','Europe/Madrid','Europe/Rome',
+    'Europe/Amsterdam','Europe/Stockholm','Europe/Zurich','Europe/Warsaw',
+    'Asia/Dubai','Asia/Kolkata','Asia/Singapore','Asia/Tokyo','Asia/Seoul',
+    'Asia/Shanghai','Asia/Bangkok','Asia/Jakarta',
+    'Australia/Sydney','Australia/Melbourne','Australia/Brisbane','Pacific/Auckland',
+    'UTC',
+  ];
+
+  const tenantCards = tenants.map((t) => {
+    const emails = t.recipient_emails.split(',').map((e) => e.trim()).join(', ');
+    const status = t.last_digest_status
+      ? `<span class="${t.last_digest_status === 'success' ? 'badge-ok' : 'badge-err'}">${t.last_digest_status === 'success' ? 'Sent' : 'Error'}</span>`
+      : '<span class="badge-pending">Pending</span>';
+    const lastRun = t.last_digest_at
+      ? new Date(t.last_digest_at + ' UTC').toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+      : '—';
+    const freq = t.digest_frequency || 'daily';
+    const hour = Number(t.digest_hour ?? 7);
+    const tz = t.digest_timezone || 'America/New_York';
+    const period = Number(t.report_period_days) || 1;
+    const day = Number(t.digest_day ?? 1);
+    const hourLabel = `${String(hour).padStart(2,'0')}:00`;
+    const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const scheduleLabel = freq === 'weekly' ? `Weekly on ${DAYS[day]} at ${hourLabel}` : `Daily at ${hourLabel}`;
+    const periodLabel = period === 1 ? 'Yesterday' : `Last ${period} days`;
+
+    const tzOptions = TIMEZONES.map((z) =>
+      `<option value="${z}"${z === tz ? ' selected' : ''}>${z}</option>`
+    ).join('');
+
+    const dayOptions = DAYS.map((d, i) =>
+      `<option value="${i}"${i === day ? ' selected' : ''}>${d}</option>`
+    ).join('');
+
+    return `
+      <div class="card" style="margin-bottom:16px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:200px;">
+            <strong style="font-size:15px;">${escHtml(t.name)}</strong>
+            <div class="small" style="margin-top:4px;">${escHtml(emails)}</div>
+            <div class="small" style="margin-top:2px;">Key: ${maskKey(t.hubspot_api_key)}</div>
+            <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              ${status}
+              <span class="small">Last run: ${lastRun}</span>
+            </div>
+            <div class="small" style="margin-top:6px;color:#6e6e73;">
+              ${escHtml(scheduleLabel)} &middot; ${escHtml(periodLabel)} &middot; ${escHtml(tz)}
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
             <a href="/dashboard/preview/${t.id}" target="_blank" class="btn-preview">Preview</a>
             <form method="POST" action="/dashboard/tenants/${t.id}/send" onsubmit="return confirm('Send digest now for ${escHtml(t.name)}?')" style="display:inline;">
               <button type="submit" class="btn-send">Send Now</button>
@@ -245,18 +282,55 @@ function dashboardPage(user, tenants, flash) {
             <form method="POST" action="/dashboard/tenants/${t.id}/delete" onsubmit="return confirm('Remove ${escHtml(t.name)}?')" style="display:inline;">
               <button type="submit" class="btn-remove">Remove</button>
             </form>
-          </td>
-        </tr>`;
-    })
-    .join('');
+          </div>
+        </div>
 
-  const table = tenants.length > 0
-    ? `<table>
-        <thead><tr>
-          <th>Company</th><th>Recipients</th><th>API Key</th><th>Last Status</th><th>Last Run</th><th>Actions</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-       </table>`
+        <details style="margin-top:16px;">
+          <summary style="font-size:13px;font-weight:500;cursor:pointer;color:#0071e3;">Schedule &amp; reporting settings</summary>
+          <form method="POST" action="/dashboard/tenants/${t.id}/settings" style="margin-top:12px;">
+            <div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;">
+              <div class="form-group">
+                <label>Frequency</label>
+                <select name="digest_frequency" style="border:1px solid #d2d2d7;border-radius:8px;padding:9px 12px;font-size:14px;width:100%;">
+                  <option value="daily"${freq === 'daily' ? ' selected' : ''}>Daily</option>
+                  <option value="weekly"${freq === 'weekly' ? ' selected' : ''}>Weekly</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Day (weekly only)</label>
+                <select name="digest_day" style="border:1px solid #d2d2d7;border-radius:8px;padding:9px 12px;font-size:14px;width:100%;">
+                  ${dayOptions}
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Send hour (0–23)</label>
+                <input type="number" name="digest_hour" min="0" max="23" value="${hour}" style="border:1px solid #d2d2d7;border-radius:8px;padding:9px 12px;font-size:14px;width:100%;">
+                <span class="hint">In the timezone below</span>
+              </div>
+              <div class="form-group">
+                <label>Reporting period</label>
+                <select name="report_period_days" style="border:1px solid #d2d2d7;border-radius:8px;padding:9px 12px;font-size:14px;width:100%;">
+                  <option value="1"${period === 1 ? ' selected' : ''}>Yesterday (1 day)</option>
+                  <option value="7"${period === 7 ? ' selected' : ''}>Last 7 days</option>
+                  <option value="30"${period === 30 ? ' selected' : ''}>Last 30 days</option>
+                </select>
+              </div>
+              <div class="form-group" style="grid-column:1/-1;">
+                <label>Timezone</label>
+                <select name="digest_timezone" style="border:1px solid #d2d2d7;border-radius:8px;padding:9px 12px;font-size:14px;width:100%;">
+                  ${tzOptions}
+                </select>
+              </div>
+            </div>
+            <div style="margin-top:12px;">
+              <button type="submit" class="btn-primary" style="padding:8px 18px;font-size:13px;">Save Settings</button>
+            </div>
+          </form>
+        </details>
+      </div>`;
+  }).join('');
+
+  const tenantsSection = tenants.length > 0 ? tenantCards
     : '<p class="empty">No companies added yet. Add your first one below.</p>';
 
   return `${baseHead('Dashboard')}
@@ -267,9 +341,9 @@ function dashboardPage(user, tenants, flash) {
   <div class="container">
     ${flashHtml}
 
-    <div class="card">
-      <h2>Your Companies (${tenants.length})</h2>
-      ${table}
+    <div style="margin-bottom:24px;">
+      <h2 style="font-size:16px;font-weight:600;margin-bottom:16px;">Your Companies (${tenants.length})</h2>
+      ${tenantsSection}
     </div>
 
     <div class="card">
@@ -397,7 +471,7 @@ app.post('/signup', async (req, res) => {
       .replace('T', ' ')
       .slice(0, 19);
 
-    const userId = await createUser({ email, passwordHash, trialEndsAt });
+    const userId = Number(await createUser({ email, passwordHash, trialEndsAt }));
     setSessionCookie(res, userId, email);
     res.redirect('/dashboard');
   } catch (err) {
@@ -471,6 +545,33 @@ app.post('/dashboard/tenants/:id/delete', requireAuth, loadUser, async (req, res
   res.redirect('/dashboard');
 });
 
+app.post('/dashboard/tenants/:id/settings', requireAuth, loadUser, async (req, res) => {
+  const tenant = await getTenantForUser(Number(req.params.id), req.user.id);
+  if (!tenant) return res.redirect('/dashboard');
+
+  const { digest_frequency, digest_day, digest_hour, digest_timezone, report_period_days } = req.body;
+
+  const validFreq = ['daily', 'weekly'].includes(digest_frequency) ? digest_frequency : 'daily';
+  const validDay = Math.max(0, Math.min(6, parseInt(digest_day) || 1));
+  const validHour = Math.max(0, Math.min(23, parseInt(digest_hour) || 7));
+  const validPeriod = [1, 7, 30].includes(parseInt(report_period_days)) ? parseInt(report_period_days) : 1;
+
+  try {
+    await updateTenantSettings(tenant.id, {
+      digestFrequency: validFreq,
+      digestDay: validDay,
+      digestHour: validHour,
+      digestTimezone: digest_timezone || 'America/New_York',
+      reportPeriodDays: validPeriod,
+    });
+    const flash = encodeURIComponent(`✓ Settings saved for ${tenant.name}.`);
+    res.redirect(`/dashboard?flash=${flash}`);
+  } catch (err) {
+    const flash = encodeURIComponent(`Failed to save settings: ${err.message}`);
+    res.redirect(`/dashboard?flash=${flash}`);
+  }
+});
+
 app.post('/dashboard/tenants/:id/send', requireAuth, loadUser, requireSubscription, async (req, res) => {
   const tenant = await getTenantForUser(Number(req.params.id), req.user.id);
   if (!tenant) return res.redirect('/dashboard');
@@ -485,6 +586,7 @@ app.post('/dashboard/tenants/:id/send', requireAuth, loadUser, requireSubscripti
       hubspotApiKey: tenant.hubspot_api_key,
       recipients: tenant.recipient_emails,
       previewUrl: appUrl ? `${appUrl}/dashboard/preview/${tenant.id}` : undefined,
+      reportPeriodDays: Number(tenant.report_period_days) || 1,
     }))
     .then(() => updateTenantDigestStatus(tenant.id, 'success'))
     .then(() => console.log(`[send-now] Digest sent for tenant: ${tenant.name}`))
@@ -499,7 +601,11 @@ app.get('/dashboard/preview/:id', requireAuth, loadUser, requireSubscription, as
   if (!tenant) return res.status(404).send('Not found.');
 
   try {
-    const result = await generateDigest({ skipEmail: true, hubspotApiKey: tenant.hubspot_api_key });
+    const result = await generateDigest({
+      skipEmail: true,
+      hubspotApiKey: tenant.hubspot_api_key,
+      reportPeriodDays: Number(tenant.report_period_days) || 1,
+    });
     res.send(result.htmlBody);
   } catch (err) {
     res.status(500).send(`<pre>Error generating digest: ${escHtml(err.message)}</pre>`);
@@ -791,17 +897,17 @@ app.listen(PORT, () => {
 
   const cron = require('node-cron');
   const { runAllTenants } = require('./digest');
-  const CRON_SCHEDULE = process.env.CRON_SCHEDULE || '0 22 * * *';
-  cron.schedule(CRON_SCHEDULE, async () => {
-    console.log(`[cron] Starting scheduled digest run at ${new Date().toISOString()}`);
+  // Run every hour at :00; per-tenant schedule is checked inside runAllTenants
+  cron.schedule('0 * * * *', async () => {
+    console.log(`[cron] Hourly check at ${new Date().toISOString()}`);
     try {
-      await runAllTenants();
+      await runAllTenants({ respectSchedule: true });
       console.log('[cron] Done.');
     } catch (err) {
       console.error('[cron] Failed:', err.message);
     }
   });
-  console.log(`  Scheduler: ${CRON_SCHEDULE} UTC`);
+  console.log('  Scheduler: hourly (per-tenant schedule applies)');
 });
 
 module.exports = app;

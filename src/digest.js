@@ -18,6 +18,7 @@ const {
   fetchCompaniesCreated,
   fetchAccountInfo,
   getYesterdayRange,
+  getReportingRange,
   fetchFormsSubmitted,
   fetchAdLeads,
 } = require('./hubspot');
@@ -80,7 +81,7 @@ async function generateDigest(options = {}) {
 }
 
 async function _generateDigest(options = {}) {
-  const { isTest = false, skipEmail = false, hubspotApiKey, recipients: recipientOverride, previewUrl } = options;
+  const { isTest = false, skipEmail = false, hubspotApiKey, recipients: recipientOverride, previewUrl, reportPeriodDays = 1 } = options;
 
   console.log(`\n${'='.repeat(60)}`);
   console.log(`HubSpot Activity Digest — ${new Date().toISOString()}`);
@@ -99,7 +100,7 @@ async function _generateDigest(options = {}) {
     console.warn(`Could not fetch account timezone, defaulting to ${accountTimezone}:`, err.message);
   }
 
-  const range = getYesterdayRange(accountTimezone);
+  const range = getReportingRange(accountTimezone, reportPeriodDays);
   const dateRange = `${formatDate(new Date(range.startMs), accountTimezone)} → ${formatDate(new Date(range.endMs), accountTimezone)}`;
   console.log(`\nFetching activities for: ${dateRange}`);
 
@@ -190,6 +191,7 @@ async function _generateDigest(options = {}) {
     stageMap: Array.isArray(stageMap) ? {} : stageMap,
     errors,
     previewUrl,
+    showAll: skipEmail, // preview renders all rows; email caps at VIEW_MORE_LIMIT
   });
 
   const subject = generateSubject(formatDate(now, accountTimezone).split(',')[0], totalActivities);
@@ -257,10 +259,44 @@ async function runDigest(options = {}) {
 }
 
 /**
+ * Returns true if the tenant's scheduled digest should run at `now`.
+ * The cron fires every hour; this checks whether the current hour (in
+ * the tenant's timezone) matches the configured hour, and for weekly
+ * digests also checks the day of week.
+ */
+function shouldRunTenant(tenant, now = new Date()) {
+  const tz = tenant.digest_timezone || 'America/New_York';
+  const targetHour = Number(tenant.digest_hour ?? 7);
+  const freq = tenant.digest_frequency || 'daily';
+
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    hour: 'numeric',
+    weekday: 'short',
+    hour12: false,
+  }).formatToParts(now);
+
+  const localHour = parseInt(parts.find((p) => p.type === 'hour').value, 10);
+  if (localHour !== targetHour) return false;
+
+  if (freq === 'weekly') {
+    const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const weekdayStr = parts.find((p) => p.type === 'weekday').value;
+    const localDay = WEEKDAYS.indexOf(weekdayStr);
+    const targetDay = Number(tenant.digest_day ?? 1); // default Monday
+    return localDay === targetDay;
+  }
+
+  return true; // daily
+}
+
+/**
  * Run the digest for every active tenant in the database.
  * Falls back to env vars if no tenants are configured.
+ * When `respectSchedule` is true (the hourly cron path), only runs tenants
+ * whose configured hour/day matches the current time.
  */
-async function runAllTenants() {
+async function runAllTenants({ respectSchedule = false } = {}) {
   const { getAllTenants, updateTenantDigestStatus } = require('./db');
   const tenants = await getAllTenants();
 
@@ -269,8 +305,16 @@ async function runAllTenants() {
     return runDigest({});
   }
 
-  console.log(`Running digest for ${tenants.length} tenant(s)...`);
-  for (const tenant of tenants) {
+  const now = new Date();
+  const due = respectSchedule ? tenants.filter((t) => shouldRunTenant(t, now)) : tenants;
+
+  if (due.length === 0) {
+    console.log('[cron] No tenants scheduled for this hour.');
+    return;
+  }
+
+  console.log(`Running digest for ${due.length} tenant(s)...`);
+  for (const tenant of due) {
     console.log(`\n${'─'.repeat(60)}`);
     console.log(`Tenant: ${tenant.name}`);
     try {
@@ -279,6 +323,7 @@ async function runAllTenants() {
         hubspotApiKey: tenant.hubspot_api_key,
         recipients: tenant.recipient_emails,
         previewUrl: appUrl ? `${appUrl}/dashboard/preview/${tenant.id}` : undefined,
+        reportPeriodDays: Number(tenant.report_period_days) || 1,
       });
       await updateTenantDigestStatus(tenant.id, 'success');
     } catch (err) {

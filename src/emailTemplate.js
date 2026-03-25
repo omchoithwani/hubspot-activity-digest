@@ -121,10 +121,10 @@ function activityRow(cells, isAlt = false) {
  * Render a table with headers.
  * If rows exceed VIEW_MORE_LIMIT and a viewMoreUrl is provided, truncates and adds a link row.
  */
-function activityTable(headers, rows, viewMoreUrl) {
+function activityTable(headers, rows, viewMoreUrl, showAll = false) {
   if (rows.length === 0) return `<tr><td><p style="color:${TEXT_MUTED};font-style:italic;font-family:'DM Sans',Arial,sans-serif;font-size:13px;padding:8px 0;">No activity recorded.</p></td></tr>`;
 
-  const truncated = rows.length > VIEW_MORE_LIMIT;
+  const truncated = !showAll && rows.length > VIEW_MORE_LIMIT;
   const visibleRows = truncated ? rows.slice(0, VIEW_MORE_LIMIT) : rows;
   const hiddenCount = rows.length - VIEW_MORE_LIMIT;
 
@@ -193,7 +193,7 @@ function stageBadge(from, to) {
 /**
  * Main function to generate the HTML email
  */
-function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors, previewUrl }) {
+function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors, previewUrl, showAll = false }) {
   const {
     dealsCreated = [],
     dealStageChanges = [],
@@ -634,7 +634,8 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors, previe
                 ${activityTable(
                   ['Name', 'Email', 'Company', 'Platform', 'Campaign', 'Created'],
                   adLeadRows,
-                  previewUrl
+                  previewUrl,
+                  showAll
                 )}` : ''}
 
                 <!-- Deals Created -->
@@ -642,7 +643,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors, previe
                 ${sectionHeader('Deals Created', dealsCreated.length)}
                 ${dealsCreated.length >= BULK_THRESHOLD
                   ? bulkSummaryBlock(dealsCreated.length, 'deal')
-                  : activityTable(['Deal Name', 'Created', 'Pipeline', 'Stage', 'Amount', 'Owner'], dealsCreatedRows, previewUrl)
+                  : activityTable(['Deal Name', 'Created', 'Pipeline', 'Stage', 'Amount', 'Owner'], dealsCreatedRows, previewUrl, showAll)
                 }` : ''}
 
                 <!-- Deal Stage Changes -->
@@ -651,7 +652,8 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors, previe
                 ${activityTable(
                   ['Deal Name', 'Stage Transition', 'Owner', 'Changed At'],
                   stageChangeRows,
-                  previewUrl
+                  previewUrl,
+                  showAll
                 )}` : ''}
 
                 <!-- Tasks Completed -->
@@ -660,7 +662,8 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors, previe
                 ${activityTable(
                   ['Task Subject', 'Type', 'Due Date', 'Owner'],
                   tasksRows,
-                  previewUrl
+                  previewUrl,
+                  showAll
                 )}` : ''}
 
                 <!-- Calls Logged -->
@@ -669,7 +672,8 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors, previe
                 ${activityTable(
                   ['Title', 'Time', 'Direction', 'Duration', 'Owner'],
                   callsRows,
-                  previewUrl
+                  previewUrl,
+                  showAll
                 )}` : ''}
 
                 <!-- Emails Sent -->
@@ -678,7 +682,8 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors, previe
                 ${activityTable(
                   ['Subject', 'To', 'Status', 'Owner'],
                   emailRows,
-                  previewUrl
+                  previewUrl,
+                  showAll
                 )}` : ''}
 
                 <!-- Meetings Booked -->
@@ -687,7 +692,8 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors, previe
                 ${activityTable(
                   ['Title', 'Start Time', 'Outcome', 'Owner'],
                   meetingRows,
-                  previewUrl
+                  previewUrl,
+                  showAll
                 )}` : ''}
 
                 <!-- Notes Added -->
@@ -696,7 +702,8 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors, previe
                 ${activityTable(
                   ['Note Preview', 'Contact', 'Deal', 'Owner'],
                   noteRows,
-                  previewUrl
+                  previewUrl,
+                  showAll
                 )}` : ''}
 
                 <!-- Contacts Created -->
@@ -704,7 +711,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors, previe
                 ${sectionHeader('Contacts Created', contactsCreated.length)}
                 ${contactsCreated.length >= BULK_THRESHOLD
                   ? bulkSummaryBlock(contactsCreated.length, 'contact')
-                  : activityTable(['Name', 'Email', 'Company', 'Created', 'Owner'], contactRows, previewUrl)
+                  : activityTable(['Name', 'Email', 'Company', 'Created', 'Owner'], contactRows, previewUrl, showAll)
                 }` : ''}
 
                 <!-- Companies Created -->
@@ -712,7 +719,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors, previe
                 ${sectionHeader('Companies Created', companiesCreated.length)}
                 ${companiesCreated.length >= BULK_THRESHOLD
                   ? bulkSummaryBlock(companiesCreated.length, 'company')
-                  : activityTable(['Company Name', 'Domain', 'Industry', 'Created', 'Owner'], companyRows, previewUrl)
+                  : activityTable(['Company Name', 'Domain', 'Industry', 'Created', 'Owner'], companyRows, previewUrl, showAll)
                 }` : ''}
 
                 <!-- Form Submissions -->
@@ -721,7 +728,8 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, errors, previe
                 ${activityTable(
                   ['Form', 'Submitted At', 'Email', 'Name', 'Page'],
                   formSubmissionRows,
-                  previewUrl
+                  previewUrl,
+                  showAll
                 )}` : ''}
 
                 `}

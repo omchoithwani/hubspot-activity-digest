@@ -102,13 +102,21 @@ function midnightUtcMs(dateStr, timezone) {
  * Return { startMs, endMs } for yesterday midnight→today midnight in the given IANA timezone.
  */
 function getYesterdayRange(ianaTimezone) {
+  return getReportingRange(ianaTimezone, 1);
+}
+
+/**
+ * Return { startMs, endMs } covering the last `periodDays` complete days in the given timezone.
+ * e.g. periodDays=1 → yesterday, periodDays=7 → last 7 days, periodDays=30 → last 30 days.
+ */
+function getReportingRange(ianaTimezone, periodDays = 1) {
   const now = new Date();
   const todayStr = now.toLocaleDateString('en-CA', { timeZone: ianaTimezone }); // YYYY-MM-DD
   const [y, m, d] = todayStr.split('-').map(Number);
-  const yesterdayStr = new Date(Date.UTC(y, m - 1, d - 1, 12, 0, 0))
+  const startStr = new Date(Date.UTC(y, m - 1, d - periodDays, 12, 0, 0))
     .toLocaleDateString('en-CA', { timeZone: ianaTimezone });
   return {
-    startMs: midnightUtcMs(yesterdayStr, ianaTimezone),
+    startMs: midnightUtcMs(startStr, ianaTimezone),
     endMs: midnightUtcMs(todayStr, ianaTimezone),
   };
 }
@@ -716,6 +724,7 @@ module.exports = {
   fetchCompaniesCreated,
   fetchAccountInfo,
   getYesterdayRange,
+  getReportingRange,
   fetchFormsSubmitted,
   fetchAdLeads,
 };
