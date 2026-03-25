@@ -123,6 +123,9 @@ function getReportingRange(ianaTimezone, periodDays = 1) {
     // so we must use UTC midnight rather than local-timezone midnight.
     startDateUtcMs: new Date(startStr + 'T00:00:00Z').getTime(),
     endDateUtcMs:   new Date(todayStr + 'T00:00:00Z').getTime(),
+    // ISO date strings (YYYY-MM-DD) for the start and end of the reporting period.
+    startDateStr: startStr,
+    endDateStr: todayStr,
   };
 }
 
@@ -307,9 +310,13 @@ async function fetchDealStageChanges({ startMs, endMs }) {
 /**
  * Fetch tasks completed in the last 24 hours
  */
-async function fetchTasksCompleted({ startMs, endMs, startDateUtcMs, endDateUtcMs }) {
+async function fetchTasksCompleted({ startMs, endMs, startDateUtcMs, endDateUtcMs, startDateStr, endDateStr }) {
   const completionStart = startDateUtcMs ?? startMs;
   const completionEnd   = endDateUtcMs   ?? endMs;
+  // Widen search window by 1 day on each side to catch UTC-offset edge cases,
+  // then post-filter precisely using date strings.
+  const searchStart = completionStart - 86400000;
+  const searchEnd   = completionEnd   + 86400000;
 
   try {
     const c = getClient();
@@ -322,8 +329,8 @@ async function fetchTasksCompleted({ startMs, endMs, startDateUtcMs, endDateUtcM
         filterGroups: [{
           filters: [
             { propertyName: 'hs_task_status',          operator: 'EQ',  value: 'COMPLETED' },
-            { propertyName: 'hs_task_completion_date', operator: 'GTE', value: String(completionStart) },
-            { propertyName: 'hs_task_completion_date', operator: 'LT',  value: String(completionEnd) },
+            { propertyName: 'hs_task_completion_date', operator: 'GTE', value: String(searchStart) },
+            { propertyName: 'hs_task_completion_date', operator: 'LT',  value: String(searchEnd) },
           ],
         }],
         properties: ['hs_task_subject', 'hs_task_type', 'hubspot_owner_id', 'hs_task_body', 'hs_timestamp', 'hs_task_completion_date'],
@@ -348,16 +355,25 @@ async function fetchTasksCompleted({ startMs, endMs, startDateUtcMs, endDateUtcM
       }
     );
 
-    // Merge, deduplicate, then post-filter: if a task HAS hs_task_completion_date,
-    // only keep it when that date falls in the window (removes false positives from
-    // the lastModified search where the task was edited but completed on a different day).
+    // Merge, deduplicate, then post-filter precisely.
+    // hs_task_completion_date is returned as epoch-ms string (e.g. "1742774400000"),
+    // NOT as an ISO date — new Date("1742774400000") is NaN in V8, so we must
+    // parse it with Number() first. We then compare as UTC date strings to avoid
+    // any timezone-offset mismatch.
     const seen = new Set();
     return [...byCompletionDate, ...byLastModified].filter((t) => {
       if (seen.has(t.id)) return false;
       seen.add(t.id);
       const cd = t.properties?.hs_task_completion_date;
       if (cd) {
-        const cdMs = new Date(cd).getTime();
+        // Handle both numeric-string ("1742774400000") and ISO-string ("2026-03-24") formats
+        const cdMs = /^\d+$/.test(cd) ? Number(cd) : new Date(cd).getTime();
+        if (isNaN(cdMs)) return false;
+        if (startDateStr && endDateStr) {
+          // Compare as UTC date strings: "YYYY-MM-DD" >= startDateStr && < endDateStr
+          const cdDateStr = new Date(cdMs).toISOString().split('T')[0];
+          return cdDateStr >= startDateStr && cdDateStr < endDateStr;
+        }
         return cdMs >= completionStart && cdMs < completionEnd;
       }
       return true; // no completion date — include it (came from lastModified search)
