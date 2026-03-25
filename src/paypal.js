@@ -23,7 +23,7 @@ const PLANS = {
     mode: 'subscription',
     label: 'Annual',
     period: '/ year',
-    description: 'Save ~28% vs monthly',
+    description: 'Save $120/yr vs monthly',
     badge: 'Best Value',
   },
   lifetime: {
@@ -78,9 +78,9 @@ async function paypalRequest(method, path, body, accessToken) {
  */
 async function fetchLivePrices() {
   return {
-    monthly: process.env.PAYPAL_PRICE_MONTHLY || '—',
-    annual:  process.env.PAYPAL_PRICE_ANNUAL  || '—',
-    lifetime: process.env.PAYPAL_PRICE_LIFETIME || '—',
+    monthly:  process.env.PAYPAL_PRICE_MONTHLY  || '$40',
+    annual:   process.env.PAYPAL_PRICE_ANNUAL   || '$360',
+    lifetime: process.env.PAYPAL_PRICE_LIFETIME || '$499',
   };
 }
 
