@@ -513,13 +513,70 @@ function dashboardPage(user, tenants, flash) {
           <div class="form-group full">
             <label for="hubspot_api_key">HubSpot Private App Access Token</label>
             <input type="password" id="hubspot_api_key" name="hubspot_api_key" placeholder="pat-na1-••••••••" required>
-            <span class="hint">HubSpot → Settings → Integrations → Private Apps</span>
           </div>
         </div>
         <div class="form-footer">
           <button type="submit" class="btn-primary">Connect company</button>
         </div>
       </form>
+
+      <hr class="divider">
+
+      <!-- How to create the key -->
+      <details>
+        <summary class="settings-toggle" style="color:var(--gray-500);">How to create your HubSpot Access Token</summary>
+        <div style="margin-top:14px;display:flex;flex-direction:column;gap:10px;">
+          <ol style="padding-left:18px;display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--gray-700);line-height:1.6;">
+            <li>In HubSpot, go to <strong>Settings → Integrations → Private Apps</strong> (top-right gear icon).</li>
+            <li>Click <strong>Create a private app</strong> and give it a name (e.g. "Activity Digest").</li>
+            <li>Under the <strong>Scopes</strong> tab, add the following <em>read-only</em> scopes:
+              <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;">
+                ${[
+                  'crm.objects.contacts.read',
+                  'crm.objects.companies.read',
+                  'crm.objects.deals.read',
+                  'crm.objects.tasks.read',
+                  'crm.objects.calls.read',
+                  'crm.objects.emails.read',
+                  'crm.objects.meetings.read',
+                  'crm.objects.notes.read',
+                  'crm.schemas.deals.read',
+                  'crm.owners.read',
+                  'account-info.security.read',
+                ].map(s => `<code style="background:var(--gray-100);color:var(--gray-700);font-size:11px;font-family:'SF Mono',Menlo,monospace;padding:3px 7px;border-radius:4px;white-space:nowrap;">${s}</code>`).join('')}
+              </div>
+            </li>
+            <li>Click <strong>Create app</strong>, then copy the access token shown.</li>
+            <li>Paste it in the field above. You can revoke it from HubSpot at any time.</li>
+          </ol>
+        </div>
+      </details>
+
+      <hr class="divider">
+
+      <!-- Data safety -->
+      <details>
+        <summary class="settings-toggle" style="color:var(--gray-500);">How is my data protected?</summary>
+        <div style="margin-top:14px;display:flex;flex-direction:column;gap:10px;font-size:13px;color:var(--gray-700);line-height:1.6;">
+          <div style="display:flex;gap:10px;align-items:flex-start;">
+            <span style="color:var(--green-fg);font-size:16px;flex-shrink:0;">✓</span>
+            <span><strong>Read-only access.</strong> All scopes above are read-only. Even if your token were ever exposed, it cannot be used to create, modify, or delete anything in your HubSpot account.</span>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;">
+            <span style="color:var(--green-fg);font-size:16px;flex-shrink:0;">✓</span>
+            <span><strong>Token stored securely.</strong> Your access token is stored in an encrypted Turso database and is never exposed in the browser or included in emails.</span>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;">
+            <span style="color:var(--green-fg);font-size:16px;flex-shrink:0;">✓</span>
+            <span><strong>No data retention.</strong> HubSpot data is fetched fresh on each digest run and is not stored anywhere — only the summary email is sent to your chosen recipients.</span>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;">
+            <span style="color:var(--blue);font-size:16px;flex-shrink:0;">ℹ</span>
+            <span><strong>You stay in control.</strong> You can revoke your HubSpot token at any time from <strong>HubSpot → Settings → Private Apps</strong>, which will immediately stop all access.</span>
+          </div>
+        </div>
+      </details>
+    </div>
     </div>
   </div>
 </body>
