@@ -372,8 +372,66 @@ async function runAllTenants({ respectSchedule = false } = {}) {
   }
 }
 
+/**
+ * On server startup, run any tenant whose scheduled time has already passed
+ * today but whose digest hasn't been sent yet today (in their timezone).
+ * Guards against missed runs caused by server restarts or deploys.
+ */
+async function runMissedTenants() {
+  const { getAllTenants, updateTenantDigestStatus } = require('./db');
+  const tenants = await getAllTenants();
+  const now = new Date();
+  const appUrl = (process.env.APP_URL || '').replace(/\/$/, '');
+
+  for (const tenant of tenants) {
+    const tz = tenant.digest_timezone || 'America/New_York';
+    const targetHour = Number(tenant.digest_hour ?? 7);
+    const freq = tenant.digest_frequency || 'daily';
+
+    const localHour = parseInt(
+      new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: '2-digit', hour12: false }).format(now),
+      10
+    ) % 24;
+
+    // Target hour hasn't arrived yet today — nothing to catch up
+    if (localHour < targetHour) continue;
+
+    // Weekly: also check the day of week
+    if (freq === 'weekly') {
+      const weekdayStr = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(now);
+      const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      if (WEEKDAYS.indexOf(weekdayStr) !== Number(tenant.digest_day ?? 1)) continue;
+    }
+
+    // Check if it already ran today (in the tenant's local timezone)
+    const todayStr = now.toLocaleDateString('en-CA', { timeZone: tz }); // YYYY-MM-DD
+    if (tenant.last_digest_at) {
+      const lastRunLocalDate = new Date(tenant.last_digest_at + ' UTC')
+        .toLocaleDateString('en-CA', { timeZone: tz });
+      if (lastRunLocalDate === todayStr) continue; // already sent today
+    }
+
+    // Scheduled time passed and not yet sent — run it now
+    console.log(`[startup] Catching up missed digest for ${tenant.name} (scheduled ${targetHour}:00 ${tz}, now ${localHour}:xx)`);
+    try {
+      await runDigest({
+        hubspotApiKey: tenant.hubspot_api_key,
+        recipients: tenant.recipient_emails,
+        previewUrl: appUrl ? `${appUrl}/dashboard/preview/${tenant.id}` : undefined,
+        reportPeriodDays: Number(tenant.report_period_days) || 1,
+        tenantId: tenant.id,
+      });
+      await updateTenantDigestStatus(tenant.id, 'success');
+      console.log(`[startup] Catch-up digest sent for ${tenant.name}`);
+    } catch (err) {
+      console.error(`[startup] Catch-up failed for ${tenant.name}:`, err.message);
+      await updateTenantDigestStatus(tenant.id, `error: ${err.message.slice(0, 200)}`).catch(() => {});
+    }
+  }
+}
+
 // Export state and runner for use by server.js
-module.exports = { generateDigest, runDigest, runAllTenants, tenantCronStatus, state };
+module.exports = { generateDigest, runDigest, runAllTenants, runMissedTenants, tenantCronStatus, state };
 
 // Run directly when called as a script
 if (require.main === module) {

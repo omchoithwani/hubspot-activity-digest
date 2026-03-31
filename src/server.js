@@ -1408,7 +1408,20 @@ app.listen(PORT, () => {
   console.log(`  Admin:    http://localhost:${PORT}/setup`);
 
   const cron = require('node-cron');
-  const { runAllTenants } = require('./digest');
+  const { runAllTenants, runMissedTenants } = require('./digest');
+
+  // On startup: catch up any tenants whose scheduled time already passed today
+  // but whose digest hasn't been sent yet (guards against missed runs from restarts)
+  setTimeout(async () => {
+    console.log('[startup] Checking for missed digests...');
+    try {
+      await runMissedTenants();
+      console.log('[startup] Catch-up check complete.');
+    } catch (err) {
+      console.error('[startup] Catch-up check failed:', err.message);
+    }
+  }, 5000); // 5s delay to let DB connections settle
+
   // Run every hour at :00; per-tenant schedule is checked inside runAllTenants
   cron.schedule('0 * * * *', async () => {
     console.log(`[cron] Hourly check at ${new Date().toISOString()}`);
@@ -1419,7 +1432,7 @@ app.listen(PORT, () => {
       console.error('[cron] Failed:', err.message);
     }
   });
-  console.log('  Scheduler: hourly (per-tenant schedule applies)');
+  console.log('  Scheduler: hourly (per-tenant schedule applies) + startup catch-up enabled');
 });
 
 module.exports = app;
