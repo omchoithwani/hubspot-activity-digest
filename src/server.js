@@ -1078,10 +1078,14 @@ app.post('/trigger', async (req, res) => {
   if (triggerToken && req.headers.authorization !== `Bearer ${triggerToken}`) {
     return res.status(401).json({ error: 'Unauthorized.' });
   }
-  res.json({ message: 'Digest triggered.', triggeredAt: new Date().toISOString() });
+  // force=true bypasses per-tenant schedule (admin manual trigger).
+  // Default is respectSchedule=true so external cron can safely call this
+  // every 5 minutes without sending duplicate emails.
+  const force = req.query.force === 'true';
+  res.json({ message: 'Digest triggered.', force, triggeredAt: new Date().toISOString() });
   try {
     const { runAllTenants } = require('./digest');
-    await runAllTenants();
+    await runAllTenants({ respectSchedule: !force });
   } catch (err) {
     console.error('Manual trigger failed:', err.message);
   }

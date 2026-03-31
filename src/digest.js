@@ -287,11 +287,19 @@ function shouldRunTenant(tenant, now = new Date()) {
     const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const weekdayStr = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(now);
     const localDay = WEEKDAYS.indexOf(weekdayStr);
-    const targetDay = Number(tenant.digest_day ?? 1);
-    return localDay === targetDay;
+    if (localDay !== Number(tenant.digest_day ?? 1)) return false;
   }
 
-  return true; // daily
+  // Idempotency: if already sent today (in tenant's timezone), skip.
+  // This makes it safe to call the trigger endpoint multiple times per hour.
+  if (tenant.last_digest_at) {
+    const todayStr = now.toLocaleDateString('en-CA', { timeZone: tz });
+    const lastRunDate = new Date(tenant.last_digest_at + ' UTC')
+      .toLocaleDateString('en-CA', { timeZone: tz });
+    if (lastRunDate === todayStr) return false;
+  }
+
+  return true;
 }
 
 /**
