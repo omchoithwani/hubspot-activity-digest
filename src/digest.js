@@ -439,7 +439,82 @@ async function runMissedTenants() {
 }
 
 // Export state and runner for use by server.js
-module.exports = { generateDigest, runDigest, runAllTenants, runMissedTenants, tenantCronStatus, state };
+/**
+ * Returns display strings for the last send and next scheduled send for a tenant.
+ */
+function tenantSendInfo(tenant, now = new Date()) {
+  const tz        = tenant.digest_timezone || 'America/New_York';
+  const targetHour = Number(tenant.digest_hour ?? 7);
+  const freq      = tenant.digest_frequency || 'daily';
+  const WEEKDAYS  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  const ampm  = targetHour >= 12 ? 'PM' : 'AM';
+  const h12   = targetHour % 12 || 12;
+  const timeLabel = `${h12}:00 ${ampm}`;
+
+  // ── Last send ──────────────────────────────────────────────────────────────
+  let lastSentLabel = '—';
+  let lastSuccess   = null; // true | false | null
+  if (tenant.last_digest_at) {
+    lastSentLabel = new Date(tenant.last_digest_at + ' UTC').toLocaleString('en-US', {
+      timeZone: tz, dateStyle: 'medium', timeStyle: 'short',
+    });
+    lastSuccess = tenant.last_digest_status === 'success';
+  }
+
+  // ── Next send ──────────────────────────────────────────────────────────────
+  const localHour = parseInt(
+    new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: '2-digit', hour12: false }).format(now),
+    10
+  ) % 24;
+
+  const todayStr  = now.toLocaleDateString('en-CA', { timeZone: tz });
+  const sentToday = tenant.last_digest_at
+    ? new Date(tenant.last_digest_at + ' UTC').toLocaleDateString('en-CA', { timeZone: tz }) === todayStr
+    : false;
+
+  let nextLabel  = '';
+  let onTrack    = true;
+
+  if (freq === 'daily') {
+    if (!sentToday && localHour < targetHour) {
+      nextLabel = `Today at ${timeLabel}`;
+    } else if (!sentToday && localHour >= targetHour) {
+      nextLabel = `Today at ${timeLabel}`;
+      onTrack   = false; // overdue — startup catch-up should handle this
+    } else {
+      nextLabel = `Tomorrow at ${timeLabel}`;
+    }
+  } else {
+    // weekly
+    const weekdayStr = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(now);
+    const localDay   = WEEKDAYS.indexOf(weekdayStr);
+    const targetDay  = Number(tenant.digest_day ?? 1);
+    let daysUntil    = (targetDay - localDay + 7) % 7;
+
+    if (daysUntil === 0) {
+      if (!sentToday && localHour < targetHour) {
+        nextLabel = `Today at ${timeLabel}`;
+      } else if (!sentToday && localHour >= targetHour) {
+        nextLabel = `Today at ${timeLabel}`;
+        onTrack   = false;
+      } else {
+        daysUntil = 7;
+      }
+    }
+    if (daysUntil > 0) {
+      const nextDate = new Date(now.getTime() + daysUntil * 86400000);
+      const nextDateStr = nextDate.toLocaleDateString('en-US', {
+        timeZone: tz, weekday: 'short', month: 'short', day: 'numeric',
+      });
+      nextLabel = `${nextDateStr} at ${timeLabel}`;
+    }
+  }
+
+  return { lastSentLabel, lastSuccess, nextLabel, onTrack };
+}
+
+module.exports = { generateDigest, runDigest, runAllTenants, runMissedTenants, tenantCronStatus, tenantSendInfo, state };
 
 // Run directly when called as a script
 if (require.main === module) {

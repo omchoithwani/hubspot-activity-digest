@@ -5,7 +5,7 @@ require('dotenv').config();
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const bcrypt = require('bcryptjs');
-const { state, generateDigest, tenantCronStatus } = require('./digest');
+const { state, generateDigest, tenantCronStatus, tenantSendInfo } = require('./digest');
 const {
   adminUpdateUser,
   deleteUser,
@@ -1172,24 +1172,40 @@ function adminPage(users, flash) {
       `<option value="${s}"${u.subscription_status === s ? ' selected' : ''}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`
     ).join('');
 
+    const now = new Date();
     const tenantRows = u.tenants.length === 0
-      ? `<tr><td colspan="5" style="color:var(--gray-400);font-size:12px;padding:10px 12px;text-align:center;">No companies connected</td></tr>`
+      ? `<tr><td colspan="4" style="color:var(--gray-400);font-size:12px;padding:10px 12px;text-align:center;">No companies connected</td></tr>`
       : u.tenants.map(t => {
-          const lastRun = t.last_digest_at
-            ? new Date(t.last_digest_at + ' UTC').toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })
-            : '—';
-          const tBadge = t.last_digest_status
-            ? (t.last_digest_status === 'success' ? '<span class="badge badge-ok">OK</span>' : '<span class="badge badge-err">Error</span>')
-            : '<span class="badge badge-pending">—</span>';
+          const { lastSentLabel, lastSuccess, nextLabel, onTrack } = tenantSendInfo(t, now);
+
+          const lastBadge = lastSuccess === null
+            ? '<span class="badge badge-pending">Never sent</span>'
+            : lastSuccess
+              ? '<span class="badge badge-ok">Success</span>'
+              : '<span class="badge badge-err">Failed</span>';
+
+          const nextBadge = onTrack
+            ? '<span class="badge badge-ok">On track</span>'
+            : '<span class="badge badge-err">Overdue</span>';
+
           return `<tr>
-            <td style="padding:8px 12px;font-size:13px;font-weight:500;">${escHtml(t.name)}</td>
-            <td style="padding:8px 12px;font-size:12px;color:var(--gray-500);">${escHtml(t.recipient_emails)}</td>
-            <td style="padding:8px 12px;">${tBadge}</td>
-            <td style="padding:8px 12px;font-size:12px;color:var(--gray-500);">${lastRun}</td>
-            <td style="padding:8px 12px;">
+            <td style="padding:10px 12px;font-size:13px;font-weight:500;">${escHtml(t.name)}</td>
+            <td style="padding:10px 12px;">
+              <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">
+                ${lastBadge}
+                <span style="font-size:12px;color:var(--gray-500);">${escHtml(lastSentLabel)}</span>
+              </div>
+            </td>
+            <td style="padding:10px 12px;">
+              <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">
+                ${nextBadge}
+                <span style="font-size:12px;color:var(--gray-500);">${escHtml(nextLabel)}</span>
+              </div>
+            </td>
+            <td style="padding:10px 12px;">
               <div style="display:flex;gap:6px;">
                 <form method="POST" action="/admin/tenants/${t.id}/send" style="display:inline;" onsubmit="return confirm('Send digest for ${escHtml(t.name)}?')">
-                  <button class="btn-sm btn-outline-green" type="submit">Send digest</button>
+                  <button class="btn-sm btn-outline-green" type="submit">Send now</button>
                 </form>
                 <form method="POST" action="/admin/tenants/${t.id}/delete" style="display:inline;" onsubmit="return confirm('Delete company ${escHtml(t.name)}? This cannot be undone.')">
                   <button class="btn-sm btn-outline-red" type="submit">Delete</button>
@@ -1244,9 +1260,8 @@ function adminPage(users, flash) {
             <thead>
               <tr>
                 <th>Company</th>
-                <th>Recipients</th>
-                <th>Last status</th>
-                <th>Last run</th>
+                <th>Last sent</th>
+                <th>Next send</th>
                 <th>Actions</th>
               </tr>
             </thead>
