@@ -274,25 +274,52 @@ function shouldRunTenant(tenant, now = new Date()) {
   const targetHour = Number(tenant.digest_hour ?? 7);
   const freq = tenant.digest_frequency || 'daily';
 
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz,
-    hour: 'numeric',
-    weekday: 'short',
-    hour12: false,
-  }).formatToParts(now);
+  // Use separate formatters to avoid the V8 bug where combining 'hour' and
+  // 'weekday' in one formatter with hour12:false can return 24 for midnight.
+  const localHour = parseInt(
+    new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: '2-digit', hour12: false }).format(now),
+    10
+  ) % 24; // % 24 guards against V8's "24" representation of midnight
 
-  const localHour = parseInt(parts.find((p) => p.type === 'hour').value, 10);
   if (localHour !== targetHour) return false;
 
   if (freq === 'weekly') {
     const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const weekdayStr = parts.find((p) => p.type === 'weekday').value;
+    const weekdayStr = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(now);
     const localDay = WEEKDAYS.indexOf(weekdayStr);
-    const targetDay = Number(tenant.digest_day ?? 1); // default Monday
+    const targetDay = Number(tenant.digest_day ?? 1);
     return localDay === targetDay;
   }
 
   return true; // daily
+}
+
+/**
+ * Returns debug info about what shouldRunTenant sees for a tenant right now.
+ * Used by the admin cron-status endpoint.
+ */
+function tenantCronStatus(tenant, now = new Date()) {
+  const tz = tenant.digest_timezone || 'America/New_York';
+  const localHour = parseInt(
+    new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: '2-digit', hour12: false }).format(now),
+    10
+  ) % 24;
+  const weekdayStr = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(now);
+  const localTime = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: true,
+  }).format(now);
+  const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  return {
+    tz,
+    localTime,
+    localHour,
+    localDay: WEEKDAYS.indexOf(weekdayStr),
+    weekdayStr,
+    targetHour: Number(tenant.digest_hour ?? 7),
+    targetDay: Number(tenant.digest_day ?? 1),
+    freq: tenant.digest_frequency || 'daily',
+    wouldRun: shouldRunTenant(tenant, now),
+  };
 }
 
 /**
@@ -311,6 +338,12 @@ async function runAllTenants({ respectSchedule = false } = {}) {
   }
 
   const now = new Date();
+  if (respectSchedule) {
+    for (const t of tenants) {
+      const s = tenantCronStatus(t, now);
+      console.log(`[cron] ${t.name}: localTime=${s.localTime} (${s.tz}), targetHour=${s.targetHour}, wouldRun=${s.wouldRun}`);
+    }
+  }
   const due = respectSchedule ? tenants.filter((t) => shouldRunTenant(t, now)) : tenants;
 
   if (due.length === 0) {
@@ -318,7 +351,7 @@ async function runAllTenants({ respectSchedule = false } = {}) {
     return;
   }
 
-  console.log(`Running digest for ${due.length} tenant(s)...`);
+  console.log(`[cron] Running digest for ${due.length} tenant(s)...`);
   for (const tenant of due) {
     console.log(`\n${'─'.repeat(60)}`);
     console.log(`Tenant: ${tenant.name}`);
@@ -340,7 +373,7 @@ async function runAllTenants({ respectSchedule = false } = {}) {
 }
 
 // Export state and runner for use by server.js
-module.exports = { generateDigest, runDigest, runAllTenants, state };
+module.exports = { generateDigest, runDigest, runAllTenants, tenantCronStatus, state };
 
 // Run directly when called as a script
 if (require.main === module) {

@@ -5,7 +5,7 @@ require('dotenv').config();
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const bcrypt = require('bcryptjs');
-const { state, generateDigest } = require('./digest');
+const { state, generateDigest, tenantCronStatus } = require('./digest');
 const {
   adminUpdateUser,
   deleteUser,
@@ -1291,6 +1291,55 @@ app.get('/admin', requireAuth, loadUser, requireAdmin, async (req, res) => {
   const users = await getAllUsersWithTenants();
   const flash = req.query.flash ? decodeURIComponent(req.query.flash) : null;
   res.send(adminPage(users, flash));
+});
+
+app.get('/admin/cron-status', requireAuth, loadUser, requireAdmin, async (req, res) => {
+  const tenants = await getAllTenants();
+  const now = new Date();
+  const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const rows = tenants.map(t => {
+    const s = tenantCronStatus(t, now);
+    const freqLabel = s.freq === 'weekly' ? `Weekly on ${WEEKDAYS[s.targetDay]}` : 'Daily';
+    const ampm = s.targetHour >= 12 ? 'pm' : 'am';
+    const h12 = s.targetHour % 12 || 12;
+    return `<tr>
+      <td style="padding:10px 14px;font-weight:500;">${escHtml(t.name)}</td>
+      <td style="padding:10px 14px;">${escHtml(s.tz)}</td>
+      <td style="padding:10px 14px;font-weight:600;">${escHtml(s.localTime)}</td>
+      <td style="padding:10px 14px;">${escHtml(freqLabel)} at ${h12}:00 ${ampm}</td>
+      <td style="padding:10px 14px;">${s.wouldRun
+        ? '<span class="badge badge-ok">Would run now</span>'
+        : '<span class="badge badge-pending">Waiting</span>'}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `${baseHead('Cron Status')}
+</head>
+<body>
+  ${navbar({ email: process.env.ADMIN_EMAIL || 'admin' }, 'admin')}
+  <div class="container" style="max-width:860px;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+      <a href="/admin" class="btn-secondary" style="padding:6px 12px;font-size:13px;">← Admin</a>
+      <h1 style="font-size:18px;font-weight:700;">Cron Status</h1>
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <div class="card-title" style="margin-bottom:0;">All Tenants — ${now.toISOString()}</div>
+        <a href="/admin/cron-status" class="btn-sm btn-outline" style="font-size:12px;">Refresh</a>
+      </div>
+      ${tenants.length === 0
+        ? '<p class="small muted">No tenants yet.</p>'
+        : `<table>
+          <thead><tr>
+            <th>Company</th><th>Timezone</th><th>Local time now</th><th>Schedule</th><th>Status</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`}
+    </div>
+    <p class="hint" style="margin-top:12px;">The cron fires every hour at :00. "Would run now" means this tenant's local hour matches its configured send time.</p>
+  </div>
+</body></html>`;
+  res.send(html);
 });
 
 app.post('/admin/users/:id/status', requireAuth, loadUser, requireAdmin, async (req, res) => {
