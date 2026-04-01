@@ -173,22 +173,25 @@ async function createTenant({ name, hubspotApiKey, recipientEmails, userId = nul
 
 async function deleteTenant(id) {
   const db = getClient();
-  await db.execute({ sql: 'DELETE FROM tenants WHERE id = ?', args: [id] });
+  await db.execute({ sql: 'DELETE FROM tenants WHERE id = ?', args: [Number(id)] });
 }
 
 async function updateTenantDigestStatus(id, status) {
   const db = getClient();
-  await db.execute({
+  const result = await db.execute({
     sql: 'UPDATE tenants SET last_digest_at = datetime("now"), last_digest_status = ? WHERE id = ?',
-    args: [status, id],
+    args: [status, Number(id)],
   });
+  if (result.rowsAffected === 0) {
+    console.error(`[db] updateTenantDigestStatus: no rows updated for tenant id=${id}`);
+  }
 }
 
 async function updateTenantTimezone(id, timezone) {
   const db = getClient();
   await db.execute({
     sql: 'UPDATE tenants SET digest_timezone = ? WHERE id = ?',
-    args: [timezone, id],
+    args: [timezone, Number(id)],
   });
 }
 
@@ -202,7 +205,7 @@ async function updateTenantSettings(id, { digestFrequency, digestDay, digestHour
       digest_timezone = ?,
       report_period_days = ?
       WHERE id = ?`,
-    args: [digestFrequency, digestDay, digestHour, digestTimezone, reportPeriodDays, id],
+    args: [digestFrequency, digestDay, digestHour, digestTimezone, reportPeriodDays, Number(id)],
   });
 }
 
@@ -213,14 +216,14 @@ async function adminUpdateUser(id, { status, trialEndsAt }) {
   if (status !== undefined) { sets.push('subscription_status = ?'); args.push(status); }
   if (trialEndsAt !== undefined) { sets.push('trial_ends_at = ?'); args.push(trialEndsAt); }
   if (sets.length === 0) return;
-  args.push(id);
+  args.push(Number(id));
   await db.execute({ sql: `UPDATE users SET ${sets.join(', ')} WHERE id = ?`, args });
 }
 
 async function deleteUser(id) {
   const db = getClient();
-  await db.execute({ sql: 'DELETE FROM tenants WHERE user_id = ?', args: [id] });
-  await db.execute({ sql: 'DELETE FROM users WHERE id = ?', args: [id] });
+  await db.execute({ sql: 'DELETE FROM tenants WHERE user_id = ?', args: [Number(id)] });
+  await db.execute({ sql: 'DELETE FROM users WHERE id = ?', args: [Number(id)] });
 }
 
 async function getAllUsersWithTenants() {
