@@ -179,7 +179,7 @@ async function deleteTenant(id) {
 async function updateTenantDigestStatus(id, status) {
   const db = getClient();
   const result = await db.execute({
-    sql: 'UPDATE tenants SET last_digest_at = datetime("now"), last_digest_status = ? WHERE id = ?',
+    sql: "UPDATE tenants SET last_digest_at = datetime('now'), last_digest_status = ? WHERE id = ?",
     args: [status, Number(id)],
   });
   if (result.rowsAffected === 0) {
