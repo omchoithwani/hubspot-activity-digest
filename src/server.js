@@ -1027,15 +1027,13 @@ app.get('/oauth/hubspot', requireAuth, (req, res) => {
 
   const scopes = [
     'crm.objects.contacts.read',
+    'crm.objects.companies.read',
     'crm.objects.deals.read',
     'crm.objects.owners.read',
-    'crm.objects.companies.read',
-    'crm.objects.tasks.read',
-    'crm.objects.notes.read',
-    'crm.objects.calls.read',
-    'crm.objects.meetings.read',
+    'crm.schemas.deals.read',
     'sales-email-read',
     'forms',
+    'oauth',
   ].join(' ');
 
   const state = Buffer.from(JSON.stringify({ userId: req.user.id })).toString('base64url');
