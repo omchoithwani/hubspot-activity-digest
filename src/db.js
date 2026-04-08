@@ -184,7 +184,7 @@ async function createTenantOAuth({ name, portalId, accessToken, refreshToken, ex
       (name, hubspot_api_key, hubspot_portal_id, hubspot_access_token, hubspot_refresh_token,
        hubspot_token_expires_at, digest_timezone, recipient_emails, user_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: ['', String(portalId), accessToken, refreshToken, expiresAt, timezone, recipientEmails, userId],
+    args: [name, '', String(portalId), accessToken, refreshToken, expiresAt, timezone, recipientEmails, userId],
   });
   return result.lastInsertRowid;
 }
