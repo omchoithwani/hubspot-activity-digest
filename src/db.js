@@ -231,7 +231,7 @@ async function updateTenantTimezone(id, timezone) {
   });
 }
 
-async function updateTenantSettings(id, { digestFrequency, digestDay, digestHour, digestTimezone, reportPeriodDays }) {
+async function updateTenantSettings(id, { digestFrequency, digestDay, digestHour, digestTimezone, reportPeriodDays, name, recipientEmails }) {
   const db = getClient();
   await db.execute({
     sql: `UPDATE tenants SET
@@ -239,9 +239,11 @@ async function updateTenantSettings(id, { digestFrequency, digestDay, digestHour
       digest_day = ?,
       digest_hour = ?,
       digest_timezone = ?,
-      report_period_days = ?
+      report_period_days = ?,
+      name = ?,
+      recipient_emails = ?
       WHERE id = ?`,
-    args: [digestFrequency, digestDay, digestHour, digestTimezone, reportPeriodDays, Number(id)],
+    args: [digestFrequency, digestDay, digestHour, digestTimezone, reportPeriodDays, name, recipientEmails, Number(id)],
   });
 }
 

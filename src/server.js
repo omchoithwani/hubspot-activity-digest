@@ -444,9 +444,18 @@ function dashboardPage(user, tenants, flash) {
 
         <div class="settings-panel">
           <details>
-            <summary class="settings-toggle">Schedule &amp; reporting settings</summary>
+            <summary class="settings-toggle">Settings</summary>
             <form method="POST" action="/dashboard/tenants/${t.id}/settings" style="margin-top:14px;">
-              <div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;">
+              <div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;">
+                <div class="form-group">
+                  <label>Company name</label>
+                  <input type="text" name="name" value="${escHtml(t.name)}" required>
+                </div>
+                <div class="form-group">
+                  <label>Recipient email(s)</label>
+                  <input type="text" name="recipient_emails" value="${escHtml(t.recipient_emails)}" placeholder="ceo@acme.com, ops@acme.com" required>
+                  <span class="hint">Comma-separated</span>
+                </div>
                 <div class="form-group">
                   <label>Frequency</label>
                   <select name="digest_frequency">
@@ -749,20 +758,24 @@ app.post('/dashboard/tenants/:id/settings', requireAuth, loadUser, async (req, r
   const tenant = await getTenantForUser(Number(req.params.id), req.user.id);
   if (!tenant) return res.redirect('/dashboard');
 
-  const { digest_frequency, digest_day, digest_hour, report_period_days } = req.body;
+  const { digest_frequency, digest_day, digest_hour, report_period_days, name, recipient_emails } = req.body;
 
   const validFreq = ['daily', 'weekly'].includes(digest_frequency) ? digest_frequency : 'daily';
   const validDay = Math.max(0, Math.min(6, parseInt(digest_day) || 1));
   const validHour = Math.max(0, Math.min(23, parseInt(digest_hour) || 7));
   const validPeriod = [1, 7, 30].includes(parseInt(report_period_days)) ? parseInt(report_period_days) : 1;
+  const validName = (name || '').trim() || tenant.name;
+  const validEmails = (recipient_emails || '').split(',').map(e => e.trim()).filter(Boolean).join(', ');
 
   try {
     await updateTenantSettings(tenant.id, {
       digestFrequency: validFreq,
       digestDay: validDay,
       digestHour: validHour,
-      digestTimezone: tenant.digest_timezone || 'America/New_York', // preserved, updated automatically by HubSpot sync
+      digestTimezone: tenant.digest_timezone || 'America/New_York',
       reportPeriodDays: validPeriod,
+      name: validName,
+      recipientEmails: validEmails || tenant.recipient_emails,
     });
     const flash = encodeURIComponent(`✓ Settings saved for ${tenant.name}.`);
     res.redirect(`/dashboard?flash=${flash}`);
