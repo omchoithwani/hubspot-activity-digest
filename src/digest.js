@@ -4,6 +4,7 @@ require('dotenv').config();
 
 const {
   runWithToken,
+  runWithTenant,
   fetchOwners,
   fetchDealStages,
   fetchDealsCreated,
@@ -70,10 +71,13 @@ async function safelyFetch(name, fetchFn, errors) {
  * Core digest generation function
  */
 async function generateDigest(options = {}) {
-  const { isTest = false, skipEmail = false, hubspotApiKey, recipients: recipientOverride, previewUrl } = options;
+  const { hubspotApiKey, tenant } = options;
 
-  // For multi-tenant: run the whole digest inside an async context that binds
-  // this tenant's API key, so concurrent runs never clobber each other.
+  // For multi-tenant: run inside an async context that binds this tenant's
+  // credentials so concurrent runs never clobber each other.
+  if (tenant) {
+    return runWithTenant(tenant, () => _generateDigest(options));
+  }
   if (hubspotApiKey) {
     return runWithToken(hubspotApiKey, () => _generateDigest(options));
   }
@@ -366,7 +370,7 @@ async function runAllTenants({ respectSchedule = false } = {}) {
     try {
       const appUrl = (process.env.APP_URL || '').replace(/\/$/, '');
       await runDigest({
-        hubspotApiKey: tenant.hubspot_api_key,
+        tenant,
         recipients: tenant.recipient_emails,
         previewUrl: appUrl ? `${appUrl}/dashboard/preview/${tenant.id}` : undefined,
         reportPeriodDays: Number(tenant.report_period_days) || 1,
@@ -423,7 +427,7 @@ async function runMissedTenants() {
     console.log(`[startup] Catching up missed digest for ${tenant.name} (scheduled ${targetHour}:00 ${tz}, now ${localHour}:xx)`);
     try {
       await runDigest({
-        hubspotApiKey: tenant.hubspot_api_key,
+        tenant,
         recipients: tenant.recipient_emails,
         previewUrl: appUrl ? `${appUrl}/dashboard/preview/${tenant.id}` : undefined,
         reportPeriodDays: Number(tenant.report_period_days) || 1,

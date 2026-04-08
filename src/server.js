@@ -416,7 +416,10 @@ function dashboardPage(user, tenants, flash) {
             <div class="tenant-name">${escHtml(t.name)}</div>
             <div class="tenant-meta">
               <span class="small">${escHtml(emails)}</span>
-              <span class="small muted mono" style="font-size:11px;">Key: ${maskKey(t.hubspot_api_key)}</span>
+              ${t.hubspot_access_token
+                ? `<span class="small" style="color:var(--green);font-size:11px;">&#10003; Connected via OAuth</span>`
+                : `<span class="small" style="color:var(--amber,#f59e0b);font-size:11px;">&#9888; Using API key &mdash; <a href="/oauth/hubspot" style="color:inherit;">reconnect via OAuth</a></span>`
+              }
             </div>
             <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               ${statusBadge}
@@ -498,59 +501,18 @@ function dashboardPage(user, tenants, flash) {
     </div>
 
     <div class="card">
-      <div class="card-title">Connect a Company</div>
-      <form method="POST" action="/dashboard/tenants">
-        <div class="form-grid">
-          <div class="form-group">
-            <label for="name">Company name</label>
-            <input type="text" id="name" name="name" placeholder="Acme Corp" required>
-          </div>
-          <div class="form-group">
-            <label for="recipient_emails">Recipient email(s)</label>
-            <input type="text" id="recipient_emails" name="recipient_emails" placeholder="ceo@acme.com, ops@acme.com" required>
-            <span class="hint">Separate multiple addresses with commas</span>
-          </div>
-          <div class="form-group full">
-            <label for="hubspot_api_key">HubSpot Private App Access Token</label>
-            <input type="password" id="hubspot_api_key" name="hubspot_api_key" placeholder="pat-na1-••••••••" required>
-          </div>
-        </div>
-        <div class="form-footer">
-          <button type="submit" class="btn-primary">Connect company</button>
-        </div>
-      </form>
-
-      <hr class="divider">
-
-      <!-- How to create the key -->
-      <details>
-        <summary class="settings-toggle" style="color:var(--gray-500);">How to create your HubSpot Access Token</summary>
-        <div style="margin-top:14px;display:flex;flex-direction:column;gap:10px;">
-          <ol style="padding-left:18px;display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--gray-700);line-height:1.6;">
-            <li>In HubSpot, go to <strong>Settings → Integrations → Private Apps</strong> (top-right gear icon).</li>
-            <li>Click <strong>Create a private app</strong> and give it a name (e.g. "Activity Digest").</li>
-            <li>Under the <strong>Scopes</strong> tab, add the following <em>read-only</em> scopes:
-              <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;">
-                ${[
-                  'crm.objects.contacts.read',
-                  'crm.objects.companies.read',
-                  'crm.objects.deals.read',
-                  'crm.objects.tasks.read',
-                  'crm.objects.calls.read',
-                  'crm.objects.emails.read',
-                  'crm.objects.meetings.read',
-                  'crm.objects.notes.read',
-                  'crm.schemas.deals.read',
-                  'crm.owners.read',
-                  'account-info.security.read',
-                ].map(s => `<code style="background:var(--gray-100);color:var(--gray-700);font-size:11px;font-family:'SF Mono',Menlo,monospace;padding:3px 7px;border-radius:4px;white-space:nowrap;">${s}</code>`).join('')}
-              </div>
-            </li>
-            <li>Click <strong>Create app</strong>, then copy the access token shown.</li>
-            <li>Paste it in the field above. You can revoke it from HubSpot at any time.</li>
-          </ol>
-        </div>
-      </details>
+      <div class="card-title">Connect a HubSpot Account</div>
+      <p style="font-size:14px;color:var(--gray-600);margin:0 0 20px;">
+        Click below to authorise access via HubSpot OAuth. Your company name and timezone are imported automatically.
+      </p>
+      <a href="/oauth/hubspot" class="btn-primary" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="8" cy="8" r="8" fill="white" fill-opacity="0.2"/>
+          <path d="M10.5 5.5C10.5 6.88 9.38 8 8 8C6.62 8 5.5 6.88 5.5 5.5C5.5 4.12 6.62 3 8 3C9.38 3 10.5 4.12 10.5 5.5Z" fill="white"/>
+          <path d="M13 12.5C13 11.12 10.76 10 8 10C5.24 10 3 11.12 3 12.5V13H13V12.5Z" fill="white"/>
+        </svg>
+        Connect with HubSpot
+      </a>
 
       <hr class="divider">
 
@@ -560,19 +522,19 @@ function dashboardPage(user, tenants, flash) {
         <div style="margin-top:14px;display:flex;flex-direction:column;gap:10px;font-size:13px;color:var(--gray-700);line-height:1.6;">
           <div style="display:flex;gap:10px;align-items:flex-start;">
             <span style="color:var(--green-fg);font-size:16px;flex-shrink:0;">✓</span>
-            <span><strong>Read-only access.</strong> All scopes above are read-only. Even if your token were ever exposed, it cannot be used to create, modify, or delete anything in your HubSpot account.</span>
+            <span><strong>Read-only access.</strong> All OAuth scopes are read-only — we can never create, modify, or delete anything in your HubSpot account.</span>
           </div>
           <div style="display:flex;gap:10px;align-items:flex-start;">
             <span style="color:var(--green-fg);font-size:16px;flex-shrink:0;">✓</span>
-            <span><strong>Token stored securely.</strong> Your access token is stored in an encrypted Turso database and is never exposed in the browser or included in emails.</span>
+            <span><strong>Tokens stored securely.</strong> OAuth tokens are stored in an encrypted database and are never exposed in the browser or sent in emails.</span>
           </div>
           <div style="display:flex;gap:10px;align-items:flex-start;">
             <span style="color:var(--green-fg);font-size:16px;flex-shrink:0;">✓</span>
-            <span><strong>No data retention.</strong> HubSpot data is fetched fresh on each digest run and is not stored anywhere — only the summary email is sent to your chosen recipients.</span>
+            <span><strong>No data retention.</strong> HubSpot data is fetched fresh on each digest run and is not stored — only the summary email is sent.</span>
           </div>
           <div style="display:flex;gap:10px;align-items:flex-start;">
             <span style="color:var(--blue);font-size:16px;flex-shrink:0;">ℹ</span>
-            <span><strong>You stay in control.</strong> You can revoke your HubSpot token at any time from <strong>HubSpot → Settings → Private Apps</strong>, which will immediately stop all access.</span>
+            <span><strong>You stay in control.</strong> You can disconnect at any time from <strong>HubSpot → Settings → Connected Apps</strong>.</span>
           </div>
         </div>
       </details>
@@ -821,7 +783,7 @@ app.post('/dashboard/tenants/:id/send', requireAuth, loadUser, requireSubscripti
   const appUrl = (process.env.APP_URL || '').replace(/\/$/, '');
   Promise.resolve()
     .then(() => runDigest({
-      hubspotApiKey: tenant.hubspot_api_key,
+      tenant,
       recipients: tenant.recipient_emails,
       previewUrl: appUrl ? `${appUrl}/dashboard/preview/${tenant.id}` : undefined,
       reportPeriodDays: Number(tenant.report_period_days) || 1,
@@ -842,7 +804,7 @@ app.get('/dashboard/preview/:id', requireAuth, loadUser, requireSubscription, as
   try {
     const result = await generateDigest({
       skipEmail: true,
-      hubspotApiKey: tenant.hubspot_api_key,
+      tenant,
       reportPeriodDays: Number(tenant.report_period_days) || 1,
     });
     res.send(result.htmlBody);
@@ -949,7 +911,7 @@ function setupPage(tenants, flash) {
         <tr>
           <td><strong>${escHtml(t.name)}</strong></td>
           <td class="mono">${escHtml(emails)}</td>
-          <td class="mono small">${maskKey(t.hubspot_api_key)}</td>
+          <td class="small">${t.hubspot_access_token ? '<span style="color:var(--green);">OAuth</span>' : '<span style="color:var(--amber,#f59e0b);">API key</span>'}</td>
           <td>${status}</td>
           <td class="small">${lastRun}</td>
           <td style="white-space:nowrap;">
@@ -966,7 +928,7 @@ function setupPage(tenants, flash) {
     .join('');
 
   const table = tenants && tenants.length > 0
-    ? `<table><thead><tr><th>Company</th><th>Recipients</th><th>API Key</th><th>Last Status</th><th>Last Run</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`
+    ? `<table><thead><tr><th>Company</th><th>Recipients</th><th>Auth</th><th>Last Status</th><th>Last Run</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`
     : '<p class="empty">No companies added yet.</p>';
 
   const flashHtml = flash
@@ -1045,7 +1007,7 @@ app.post('/setup/tenants/:id/send', requireAdmin, async (req, res) => {
   const appUrlAdmin = (process.env.APP_URL || '').replace(/\/$/, '');
   Promise.resolve()
     .then(() => runDigest({
-      hubspotApiKey: tenant.hubspot_api_key,
+      tenant,
       recipients: tenant.recipient_emails,
       previewUrl: appUrlAdmin ? `${appUrlAdmin}/dashboard/preview/${tenant.id}` : undefined,
     }))
@@ -1055,6 +1017,110 @@ app.post('/setup/tenants/:id/send', requireAdmin, async (req, res) => {
       console.error(`[send-now] Digest failed for ${tenant.name}:`, err.message);
       updateStatus(tenant.id, `error: ${err.message.slice(0, 200)}`).catch(() => {});
     });
+});
+
+// ─── HubSpot OAuth ───────────────────────────────────────────────────────────
+
+app.get('/oauth/hubspot', requireAuth, (req, res) => {
+  const clientId = process.env.HUBSPOT_CLIENT_ID;
+  if (!clientId) return res.status(500).send('HUBSPOT_CLIENT_ID is not configured.');
+
+  const scopes = [
+    'crm.objects.contacts.read',
+    'crm.objects.deals.read',
+    'crm.objects.owners.read',
+    'crm.objects.companies.read',
+    'crm.objects.tasks.read',
+    'crm.objects.notes.read',
+    'crm.objects.calls.read',
+    'crm.objects.meetings.read',
+    'sales-email-read',
+    'forms',
+  ].join(' ');
+
+  const state = Buffer.from(JSON.stringify({ userId: req.user.id })).toString('base64url');
+  const redirectUri = process.env.HUBSPOT_REDIRECT_URI;
+
+  const authUrl = new URL('https://app.hubspot.com/oauth/authorize');
+  authUrl.searchParams.set('client_id', clientId);
+  authUrl.searchParams.set('redirect_uri', redirectUri);
+  authUrl.searchParams.set('scope', scopes);
+  authUrl.searchParams.set('state', state);
+
+  res.redirect(authUrl.toString());
+});
+
+app.get('/oauth/callback', requireAuth, async (req, res) => {
+  const { code, state: stateParam, error } = req.query;
+
+  if (error) {
+    return res.redirect('/dashboard?flash=' + encodeURIComponent('HubSpot connection was cancelled.'));
+  }
+
+  let stateData;
+  try {
+    stateData = JSON.parse(Buffer.from(stateParam, 'base64url').toString());
+  } catch {
+    return res.redirect('/dashboard?flash=' + encodeURIComponent('Invalid OAuth state. Please try again.'));
+  }
+
+  if (Number(stateData.userId) !== Number(req.user.id)) {
+    return res.redirect('/dashboard?flash=' + encodeURIComponent('State mismatch. Please try again.'));
+  }
+
+  try {
+    // Exchange code for tokens
+    const tokenRes = await fetch('https://api.hubapi.com/oauth/v1/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: process.env.HUBSPOT_CLIENT_ID,
+        client_secret: process.env.HUBSPOT_CLIENT_SECRET,
+        redirect_uri: process.env.HUBSPOT_REDIRECT_URI,
+        code,
+      }).toString(),
+    });
+    const tokenData = await tokenRes.json();
+    if (!tokenRes.ok) throw new Error(tokenData.message || 'Token exchange failed');
+
+    const { access_token, refresh_token, expires_in } = tokenData;
+    const expiresAt = new Date(Date.now() + expires_in * 1000).toISOString();
+
+    // Fetch HubSpot account details
+    const acctRes = await fetch('https://api.hubapi.com/account-info/v3/details', {
+      headers: { Authorization: `Bearer ${access_token}` },
+    });
+    const acct = await acctRes.json();
+    const portalId = String(acct.portalId);
+    const name = acct.companyName || acct.uiDomain || `Portal ${portalId}`;
+    const timezone = acct.timeZone || 'America/New_York';
+
+    const { createTenantOAuth, getTenantByPortalId, updateTenantTokens } = require('./db');
+    const existing = await getTenantByPortalId(portalId, req.user.id);
+
+    if (existing) {
+      await updateTenantTokens(existing.id, { accessToken: access_token, refreshToken: refresh_token, expiresAt });
+      const flash = encodeURIComponent(`✓ ${existing.name} reconnected via OAuth!`);
+      return res.redirect(`/dashboard?flash=${flash}`);
+    }
+
+    await createTenantOAuth({
+      name,
+      portalId,
+      accessToken: access_token,
+      refreshToken: refresh_token,
+      expiresAt,
+      timezone,
+      recipientEmails: req.user.email,
+      userId: req.user.id,
+    });
+    const flash = encodeURIComponent(`✓ ${name} connected! Set recipient emails in settings.`);
+    res.redirect(`/dashboard?flash=${flash}`);
+  } catch (err) {
+    console.error('[oauth/callback]', err.message);
+    res.redirect('/dashboard?flash=' + encodeURIComponent(`Failed to connect HubSpot: ${err.message}`));
+  }
 });
 
 // ─── Health + trigger + preview (legacy) ─────────────────────────────────────
@@ -1095,7 +1161,7 @@ app.get('/preview/:id', requireAdmin, async (req, res) => {
   const tenant = await getTenant(Number(req.params.id));
   if (!tenant) return res.status(404).send('Not found.');
   try {
-    const result = await generateDigest({ skipEmail: true, hubspotApiKey: tenant.hubspot_api_key });
+    const result = await generateDigest({ skipEmail: true, tenant });
     res.send(result.htmlBody);
   } catch (err) {
     res.status(500).send(`<pre>Error: ${escHtml(err.message)}</pre>`);
@@ -1399,7 +1465,7 @@ app.post('/admin/tenants/:id/send', requireAuth, loadUser, requireAdmin, async (
   const appUrl = (process.env.APP_URL || '').replace(/\/$/, '');
   Promise.resolve()
     .then(() => runDigest({
-      hubspotApiKey: tenant.hubspot_api_key,
+      tenant,
       recipients: tenant.recipient_emails,
       previewUrl: appUrl ? `${appUrl}/dashboard/preview/${tenant.id}` : undefined,
       reportPeriodDays: Number(tenant.report_period_days) || 1,

@@ -31,6 +31,56 @@ function runWithToken(token, fn) {
 }
 
 /**
+ * Refresh an OAuth access token using the stored refresh token.
+ * Persists the new tokens back to the database.
+ */
+async function refreshTenantToken(tenant) {
+  const { updateTenantTokens } = require('./db');
+  const res = await fetch('https://api.hubapi.com/oauth/v1/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: process.env.HUBSPOT_CLIENT_ID,
+      client_secret: process.env.HUBSPOT_CLIENT_SECRET,
+      refresh_token: tenant.hubspot_refresh_token,
+    }).toString(),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(`Token refresh failed: ${data.message || JSON.stringify(data)}`);
+  const expiresAt = new Date(Date.now() + data.expires_in * 1000).toISOString();
+  await updateTenantTokens(tenant.id, {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token || tenant.hubspot_refresh_token,
+    expiresAt,
+  });
+  console.log(`[oauth] Token refreshed for tenant ${tenant.id}`);
+  return data.access_token;
+}
+
+/**
+ * Run an async function with the correct token for a tenant.
+ * Prefers OAuth access token (with auto-refresh) over legacy API key.
+ */
+async function runWithTenant(tenant, fn) {
+  if (tenant.hubspot_access_token) {
+    let token = tenant.hubspot_access_token;
+    // Refresh proactively if within 5 minutes of expiry
+    if (tenant.hubspot_token_expires_at) {
+      const expiresAt = new Date(tenant.hubspot_token_expires_at).getTime();
+      if (Date.now() + 5 * 60 * 1000 >= expiresAt) {
+        token = await refreshTenantToken(tenant);
+      }
+    }
+    return runWithToken(token, fn);
+  }
+  if (tenant.hubspot_api_key) {
+    return runWithToken(tenant.hubspot_api_key, fn);
+  }
+  throw new Error(`No HubSpot credentials configured for tenant: ${tenant.name}`);
+}
+
+/**
  * Sleep for ms milliseconds
  */
 function sleep(ms) {
@@ -767,6 +817,8 @@ async function fetchNoteAssociations(noteIds) {
 
 module.exports = {
   runWithToken,
+  runWithTenant,
+  refreshTenantToken,
   fetchOwners,
   fetchDealStages,
   fetchDealsCreated,

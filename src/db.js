@@ -64,6 +64,11 @@ async function ensureSchema() {
     'ALTER TABLE tenants ADD COLUMN digest_hour INTEGER NOT NULL DEFAULT 7',
     "ALTER TABLE tenants ADD COLUMN digest_timezone TEXT NOT NULL DEFAULT 'America/New_York'",
     'ALTER TABLE tenants ADD COLUMN report_period_days INTEGER NOT NULL DEFAULT 1',
+    // OAuth columns (hubspot_api_key kept for legacy users)
+    'ALTER TABLE tenants ADD COLUMN hubspot_access_token TEXT',
+    'ALTER TABLE tenants ADD COLUMN hubspot_refresh_token TEXT',
+    'ALTER TABLE tenants ADD COLUMN hubspot_token_expires_at TEXT',
+    'ALTER TABLE tenants ADD COLUMN hubspot_portal_id TEXT',
   ];
   for (const sql of tenantMigrations) {
     try { await db.execute(sql); } catch (_) { /* column exists */ }
@@ -171,6 +176,37 @@ async function createTenant({ name, hubspotApiKey, recipientEmails, userId = nul
   return result.lastInsertRowid;
 }
 
+async function createTenantOAuth({ name, portalId, accessToken, refreshToken, expiresAt, timezone, recipientEmails = '', userId }) {
+  await ensureSchema();
+  const db = getClient();
+  const result = await db.execute({
+    sql: `INSERT INTO tenants
+      (name, hubspot_api_key, hubspot_portal_id, hubspot_access_token, hubspot_refresh_token,
+       hubspot_token_expires_at, digest_timezone, recipient_emails, user_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: ['', String(portalId), accessToken, refreshToken, expiresAt, timezone, recipientEmails, userId],
+  });
+  return result.lastInsertRowid;
+}
+
+async function getTenantByPortalId(portalId, userId) {
+  await ensureSchema();
+  const db = getClient();
+  const result = await db.execute({
+    sql: 'SELECT * FROM tenants WHERE hubspot_portal_id = ? AND user_id = ? AND is_active = 1',
+    args: [String(portalId), userId],
+  });
+  return result.rows[0] || null;
+}
+
+async function updateTenantTokens(id, { accessToken, refreshToken, expiresAt }) {
+  const db = getClient();
+  await db.execute({
+    sql: 'UPDATE tenants SET hubspot_access_token = ?, hubspot_refresh_token = ?, hubspot_token_expires_at = ? WHERE id = ?',
+    args: [accessToken, refreshToken || null, expiresAt, Number(id)],
+  });
+}
+
 async function deleteTenant(id) {
   const db = getClient();
   await db.execute({ sql: 'DELETE FROM tenants WHERE id = ?', args: [Number(id)] });
@@ -263,6 +299,9 @@ module.exports = {
   getTenant,
   getTenantForUser,
   createTenant,
+  createTenantOAuth,
+  getTenantByPortalId,
+  updateTenantTokens,
   deleteTenant,
   updateTenantDigestStatus,
   updateTenantTimezone,
