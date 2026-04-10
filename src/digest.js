@@ -126,7 +126,7 @@ async function _generateDigest(options = {}) {
   // HubSpot's Search API allows 4 req/s; each searchAll may paginate internally,
   // so running even two in parallel can trigger 429s.
   console.log('\nFetching activities...');
-  const gap = () => new Promise((r) => setTimeout(r, 500));
+  const gap = () => new Promise((r) => setTimeout(r, 1000));
 
   const dealsCreated = await safelyFetch('Deals Created', () => fetchDealsCreated(range), errors);
   await gap();

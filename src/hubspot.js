@@ -89,10 +89,10 @@ function sleep(ms) {
 
 /**
  * Retry wrapper with exponential backoff for rate limit (429) errors.
- * Respects the Retry-After header when present (HubSpot often sends 10s).
+ * Detects SECONDLY (per-second) vs other limits and adjusts initial wait.
  */
 async function withRetry(fn, retries = 4) {
-  let delay = 10000; // start at 10s — HubSpot's typical Retry-After window
+  let delay = 2000; // default start; overridden below based on policy
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       return await fn();
@@ -101,10 +101,16 @@ async function withRetry(fn, retries = 4) {
       if (status === 429 && attempt < retries) {
         // Honour Retry-After header if present (value is in seconds)
         const retryAfter = err?.response?.headers?.['retry-after'];
-        const waitMs = retryAfter ? Math.ceil(parseFloat(retryAfter)) * 1000 : delay;
-        console.warn(`Rate limited. Retrying in ${waitMs}ms... (attempt ${attempt + 1}/${retries})`);
+        // Detect per-second limit vs per-day limit from error body
+        let policyName = '';
+        try { policyName = (await err?.response?.json?.())?.policyName || ''; } catch (_) {}
+        const isSecondly = policyName === 'SECONDLY' || (!retryAfter && delay < 5000);
+        const waitMs = retryAfter
+          ? Math.ceil(parseFloat(retryAfter)) * 1000
+          : isSecondly ? 2000 : delay;
+        console.warn(`Rate limited (${policyName || 'unknown'}). Retrying in ${waitMs}ms... (attempt ${attempt + 1}/${retries})`);
         await sleep(waitMs);
-        delay = Math.max(delay * 2, waitMs * 2);
+        delay = isSecondly ? Math.min(delay * 1.5, 10000) : Math.max(delay * 2, waitMs * 2);
       } else {
         throw err;
       }
@@ -188,7 +194,11 @@ async function searchAll(searchFn, params, maxResults = 500) {
 
   do {
     const searchParams = { ...params, limit: 100 };
-    if (after) searchParams.after = after;
+    if (after) {
+      searchParams.after = after;
+      // Pause between pages to stay within HubSpot's per-second search limit
+      await sleep(400);
+    }
 
     const response = await withRetry(() => searchFn(searchParams));
     if (response.results) {
