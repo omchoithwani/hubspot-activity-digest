@@ -162,26 +162,58 @@ function getYesterdayRange(ianaTimezone) {
 }
 
 /**
- * Return { startMs, endMs } covering the last `periodDays` complete days in the given timezone.
- * e.g. periodDays=1 → yesterday, periodDays=7 → last 7 days, periodDays=30 → last 30 days.
+ * Return { startMs, endMs } covering the reporting period in the given timezone.
+ *
+ * periodDays=1  → yesterday (12AM–midnight)
+ * periodDays=7  + weekStartDay → last complete calendar week (Mon–Sun or Sun–Sat etc.)
+ * periodDays=7  (no weekStartDay) → rolling last 7 days
+ * periodDays=30 → rolling last 30 days
+ *
+ * weekStartDay: 0=Sun, 1=Mon, 2=Tue, … 6=Sat
  */
-function getReportingRange(ianaTimezone, periodDays = 1) {
+function getReportingRange(ianaTimezone, periodDays = 1, weekStartDay = null) {
   const now = new Date();
   const todayStr = now.toLocaleDateString('en-CA', { timeZone: ianaTimezone }); // YYYY-MM-DD
   const [y, m, d] = todayStr.split('-').map(Number);
+
+  // Weekly: calculate last complete calendar week using the configured start day
+  if (periodDays === 7 && weekStartDay !== null) {
+    const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const currentDayStr = new Intl.DateTimeFormat('en-US', {
+      timeZone: ianaTimezone, weekday: 'short',
+    }).format(now);
+    const currentDay = DAYS_SHORT.indexOf(currentDayStr); // 0=Sun … 6=Sat
+
+    // How many days have elapsed since the most recent occurrence of weekStartDay?
+    const daysSinceStart = (currentDay - weekStartDay + 7) % 7;
+
+    // Current week started daysSinceStart days ago; last week started 7 days before that.
+    // Use Date.UTC arithmetic on the local-date components to avoid DST shifts.
+    const currentWeekStartStr = new Date(Date.UTC(y, m - 1, d - daysSinceStart, 12, 0, 0))
+      .toLocaleDateString('en-CA', { timeZone: ianaTimezone });
+    const lastWeekStartStr = new Date(Date.UTC(y, m - 1, d - daysSinceStart - 7, 12, 0, 0))
+      .toLocaleDateString('en-CA', { timeZone: ianaTimezone });
+
+    return {
+      startMs:        midnightUtcMs(lastWeekStartStr,    ianaTimezone),
+      endMs:          midnightUtcMs(currentWeekStartStr, ianaTimezone),
+      startDateUtcMs: new Date(lastWeekStartStr    + 'T00:00:00Z').getTime(),
+      endDateUtcMs:   new Date(currentWeekStartStr + 'T00:00:00Z').getTime(),
+      startDateStr:   lastWeekStartStr,
+      endDateStr:     currentWeekStartStr,
+    };
+  }
+
+  // Default: rolling periodDays complete days ending at today's midnight
   const startStr = new Date(Date.UTC(y, m - 1, d - periodDays, 12, 0, 0))
     .toLocaleDateString('en-CA', { timeZone: ianaTimezone });
   return {
-    startMs: midnightUtcMs(startStr, ianaTimezone),
-    endMs: midnightUtcMs(todayStr, ianaTimezone),
-    // UTC-midnight timestamps for HubSpot date-type properties (e.g. hs_task_completion_date).
-    // These properties store midnight UTC for the date regardless of account timezone,
-    // so we must use UTC midnight rather than local-timezone midnight.
-    startDateUtcMs: new Date(startStr + 'T00:00:00Z').getTime(),
-    endDateUtcMs:   new Date(todayStr + 'T00:00:00Z').getTime(),
-    // ISO date strings (YYYY-MM-DD) for the start and end of the reporting period.
-    startDateStr: startStr,
-    endDateStr: todayStr,
+    startMs:        midnightUtcMs(startStr,  ianaTimezone),
+    endMs:          midnightUtcMs(todayStr,  ianaTimezone),
+    startDateUtcMs: new Date(startStr  + 'T00:00:00Z').getTime(),
+    endDateUtcMs:   new Date(todayStr  + 'T00:00:00Z').getTime(),
+    startDateStr:   startStr,
+    endDateStr:     todayStr,
   };
 }
 

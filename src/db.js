@@ -69,6 +69,8 @@ async function ensureSchema() {
     'ALTER TABLE tenants ADD COLUMN hubspot_refresh_token TEXT',
     'ALTER TABLE tenants ADD COLUMN hubspot_token_expires_at TEXT',
     'ALTER TABLE tenants ADD COLUMN hubspot_portal_id TEXT',
+    // Weekly period start day (0=Sun, 1=Mon ... 6=Sat)
+    'ALTER TABLE tenants ADD COLUMN week_start_day INTEGER NOT NULL DEFAULT 1',
   ];
   for (const sql of tenantMigrations) {
     try { await db.execute(sql); } catch (_) { /* column exists */ }
@@ -231,7 +233,7 @@ async function updateTenantTimezone(id, timezone) {
   });
 }
 
-async function updateTenantSettings(id, { digestFrequency, digestDay, digestHour, digestTimezone, reportPeriodDays, name, recipientEmails }) {
+async function updateTenantSettings(id, { digestFrequency, digestDay, digestHour, digestTimezone, reportPeriodDays, name, recipientEmails, weekStartDay }) {
   const db = getClient();
   await db.execute({
     sql: `UPDATE tenants SET
@@ -241,9 +243,10 @@ async function updateTenantSettings(id, { digestFrequency, digestDay, digestHour
       digest_timezone = ?,
       report_period_days = ?,
       name = ?,
-      recipient_emails = ?
+      recipient_emails = ?,
+      week_start_day = ?
       WHERE id = ?`,
-    args: [digestFrequency, digestDay, digestHour, digestTimezone, reportPeriodDays, name, recipientEmails, Number(id)],
+    args: [digestFrequency, digestDay, digestHour, digestTimezone, reportPeriodDays, name, recipientEmails, weekStartDay, Number(id)],
   });
 }
 

@@ -389,6 +389,7 @@ function dashboardPage(user, tenants, flash) {
     const freq = t.digest_frequency || 'daily';
     const hour = Number(t.digest_hour ?? 7);
     const tz = t.digest_timezone || 'America/New_York';
+    const weekStartDay = t.week_start_day != null ? Number(t.week_start_day) : 1;
     const period = Number(t.report_period_days) || 1;
     const day = Number(t.digest_day ?? 1);
     const ampm = hour >= 12 ? 'pm' : 'am';
@@ -459,14 +460,21 @@ function dashboardPage(user, tenants, flash) {
                 </div>
                 <div class="form-group">
                   <label>Frequency</label>
-                  <select name="digest_frequency">
+                  <select name="digest_frequency" onchange="(function(s){var w=document.getElementById('wk-${t.id}'),d=document.getElementById('dy-${t.id}');var weekly=s.value==='weekly';if(w)w.style.display=weekly?'':'none';if(d)d.style.display=weekly?'':'none';})(this)">
                     <option value="daily"${freq === 'daily' ? ' selected' : ''}>Daily</option>
                     <option value="weekly"${freq === 'weekly' ? ' selected' : ''}>Weekly</option>
                   </select>
                 </div>
-                <div class="form-group">
-                  <label>Day <span class="muted" style="font-size:11px;font-weight:400;">(weekly)</span></label>
+                <div class="form-group" id="dy-${t.id}" style="${freq !== 'weekly' ? 'display:none' : ''}">
+                  <label>Send on day</label>
                   <select name="digest_day">${dayOptions}</select>
+                </div>
+                <div class="form-group" id="wk-${t.id}" style="${freq !== 'weekly' ? 'display:none' : ''}">
+                  <label>Week period</label>
+                  <select name="week_start_day">
+                    <option value="1"${weekStartDay === 1 ? ' selected' : ''}>Monday – Sunday</option>
+                    <option value="0"${weekStartDay === 0 ? ' selected' : ''}>Sunday – Saturday</option>
+                  </select>
                 </div>
                 <div class="form-group">
                   <label>Send time</label>
@@ -759,7 +767,7 @@ app.post('/dashboard/tenants/:id/settings', requireAuth, loadUser, async (req, r
   const tenant = await getTenantForUser(Number(req.params.id), req.user.id);
   if (!tenant) return res.redirect('/dashboard');
 
-  const { digest_frequency, digest_day, digest_hour, report_period_days, name, recipient_emails } = req.body;
+  const { digest_frequency, digest_day, digest_hour, report_period_days, name, recipient_emails, week_start_day } = req.body;
 
   const validFreq = ['daily', 'weekly'].includes(digest_frequency) ? digest_frequency : 'daily';
   const validDay = Math.max(0, Math.min(6, parseInt(digest_day) || 1));
@@ -767,6 +775,7 @@ app.post('/dashboard/tenants/:id/settings', requireAuth, loadUser, async (req, r
   const validPeriod = [1, 7, 30].includes(parseInt(report_period_days)) ? parseInt(report_period_days) : 1;
   const validName = (name || '').trim() || tenant.name;
   const validEmails = (recipient_emails || '').split(',').map(e => e.trim()).filter(Boolean).join(', ');
+  const validWeekStart = [0, 1].includes(parseInt(week_start_day)) ? parseInt(week_start_day) : 1;
 
   try {
     await updateTenantSettings(tenant.id, {
@@ -777,6 +786,7 @@ app.post('/dashboard/tenants/:id/settings', requireAuth, loadUser, async (req, r
       reportPeriodDays: validPeriod,
       name: validName,
       recipientEmails: validEmails || tenant.recipient_emails,
+      weekStartDay: validWeekStart,
     });
     const flash = encodeURIComponent(`✓ Settings saved for ${tenant.name}.`);
     res.redirect(`/dashboard?flash=${flash}`);

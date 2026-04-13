@@ -85,7 +85,7 @@ async function generateDigest(options = {}) {
 }
 
 async function _generateDigest(options = {}) {
-  const { isTest = false, skipEmail = false, hubspotApiKey, recipients: recipientOverride, previewUrl, reportPeriodDays = 1, tenantId } = options;
+  const { isTest = false, skipEmail = false, hubspotApiKey, recipients: recipientOverride, previewUrl, reportPeriodDays = 1, tenantId, tenant } = options;
 
   console.log(`\n${'='.repeat(60)}`);
   console.log(`HubSpot Activity Digest — ${new Date().toISOString()}`);
@@ -109,7 +109,12 @@ async function _generateDigest(options = {}) {
     console.warn(`Could not fetch account timezone, defaulting to ${accountTimezone}:`, err.message);
   }
 
-  const range = getReportingRange(accountTimezone, reportPeriodDays);
+  // For weekly digests with a configured week start day, report on the last
+  // complete calendar week (e.g. Mon 12AM → Sun midnight) rather than a rolling window.
+  const weekStartDay = (tenant?.week_start_day != null && reportPeriodDays === 7)
+    ? Number(tenant.week_start_day)
+    : null;
+  const range = getReportingRange(accountTimezone, reportPeriodDays, weekStartDay);
   const dateRange = `${formatDate(new Date(range.startMs), accountTimezone)} → ${formatDate(new Date(range.endMs), accountTimezone)}`;
   console.log(`\nFetching activities for: ${dateRange}`);
 
