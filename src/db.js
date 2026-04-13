@@ -264,6 +264,19 @@ async function deleteUser(id) {
   await db.execute({ sql: 'DELETE FROM users WHERE id = ?', args: [Number(id)] });
 }
 
+async function getOrphanedTenants() {
+  await ensureSchema();
+  const db = getClient();
+  // Tenants with no user_id, or whose user_id no longer exists in users table
+  const result = await db.execute(`
+    SELECT t.* FROM tenants t
+    LEFT JOIN users u ON t.user_id = u.id
+    WHERE t.is_active = 1 AND (t.user_id IS NULL OR u.id IS NULL)
+    ORDER BY t.created_at ASC
+  `);
+  return result.rows;
+}
+
 async function getAllUsersWithTenants() {
   await ensureSchema();
   const db = getClient();
@@ -290,6 +303,7 @@ module.exports = {
   adminUpdateUser,
   deleteUser,
   getAllUsersWithTenants,
+  getOrphanedTenants,
   createUser,
   getUserByEmail,
   getUserById,

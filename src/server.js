@@ -10,6 +10,7 @@ const {
   adminUpdateUser,
   deleteUser,
   getAllUsersWithTenants,
+  getOrphanedTenants,
   getAllTenants,
   getAllTenantsForUser,
   getTenant,
@@ -1209,7 +1210,7 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-function adminPage(users, flash) {
+function adminPage(users, flash, orphaned = []) {
   const totalUsers    = users.length;
   const activeCount   = users.filter(u => u.subscription_status === 'active').length;
   const lifetimeCount = users.filter(u => u.subscription_status === 'lifetime').length;
@@ -1377,6 +1378,47 @@ function adminPage(users, flash) {
     ${users.length === 0
       ? `<div class="card"><div class="empty-state"><p>No users yet.</p></div></div>`
       : userRows}
+
+    ${orphaned.length > 0 ? `
+    <div style="margin-top:32px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+        <h2 style="font-size:16px;font-weight:600;">Orphaned Tenants</h2>
+        <span class="badge badge-err">${orphaned.length}</span>
+        <span class="small muted">No linked user account — these still run digests and may cause duplicate emails</span>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="background:var(--gray-50);border-bottom:1px solid var(--gray-200);">
+              <th style="padding:10px 16px;text-align:left;font-weight:600;">Company</th>
+              <th style="padding:10px 16px;text-align:left;font-weight:600;">Recipients</th>
+              <th style="padding:10px 16px;text-align:left;font-weight:600;">Created</th>
+              <th style="padding:10px 16px;text-align:left;font-weight:600;">Last run</th>
+              <th style="padding:10px 16px;text-align:left;font-weight:600;">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${orphaned.map(t => {
+              const created = new Date(t.created_at + ' UTC').toLocaleDateString('en-US', { dateStyle: 'medium' });
+              const lastRun = t.last_digest_at
+                ? new Date(t.last_digest_at + ' UTC').toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+                : 'Never';
+              return `<tr style="border-bottom:1px solid var(--gray-100);">
+                <td style="padding:10px 16px;font-weight:500;">${escHtml(t.name)}</td>
+                <td style="padding:10px 16px;color:var(--gray-600);">${escHtml(t.recipient_emails)}</td>
+                <td style="padding:10px 16px;color:var(--gray-500);">${created}</td>
+                <td style="padding:10px 16px;color:var(--gray-500);">${lastRun}</td>
+                <td style="padding:10px 16px;">
+                  <form method="POST" action="/admin/tenants/${t.id}/delete" onsubmit="return confirm('Delete ${escHtml(t.name)}? This cannot be undone.')">
+                    <button type="submit" style="background:var(--red-bg);color:var(--red-fg);border:1px solid var(--red-fg);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;">Delete</button>
+                  </form>
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>` : ''}
   </div>
 </body>
 </html>`;
@@ -1384,9 +1426,9 @@ function adminPage(users, flash) {
 
 // Admin routes
 app.get('/admin', requireAuth, loadUser, requireAdmin, async (req, res) => {
-  const users = await getAllUsersWithTenants();
+  const [users, orphaned] = await Promise.all([getAllUsersWithTenants(), getOrphanedTenants()]);
   const flash = req.query.flash ? decodeURIComponent(req.query.flash) : null;
-  res.send(adminPage(users, flash));
+  res.send(adminPage(users, flash, orphaned));
 });
 
 app.get('/admin/cron-status', requireAuth, loadUser, requireAdmin, async (req, res) => {
