@@ -1210,7 +1210,7 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-function adminPage(users, flash, orphaned = []) {
+function adminPage(users, flash, orphaned = [], allTenants = []) {
   const totalUsers    = users.length;
   const activeCount   = users.filter(u => u.subscription_status === 'active').length;
   const lifetimeCount = users.filter(u => u.subscription_status === 'lifetime').length;
@@ -1379,6 +1379,46 @@ function adminPage(users, flash, orphaned = []) {
       ? `<div class="card"><div class="empty-state"><p>No users yet.</p></div></div>`
       : userRows}
 
+    <div style="margin-top:32px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+        <h2 style="font-size:16px;font-weight:600;">All Active Tenants</h2>
+        <span class="badge badge-pending">${allTenants.length}</span>
+        <span class="small muted">Every tenant currently running digests — sorted by recipient for easy duplicate spotting</span>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="background:var(--gray-50);border-bottom:1px solid var(--gray-200);">
+              <th style="padding:10px 16px;text-align:left;font-weight:600;">Company</th>
+              <th style="padding:10px 16px;text-align:left;font-weight:600;">Recipients</th>
+              <th style="padding:10px 16px;text-align:left;font-weight:600;">User ID</th>
+              <th style="padding:10px 16px;text-align:left;font-weight:600;">Last run</th>
+              <th style="padding:10px 16px;text-align:left;font-weight:600;">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${[...allTenants].sort((a, b) => (a.recipient_emails || '').localeCompare(b.recipient_emails || '')).map(t => {
+              const lastRun = t.last_digest_at
+                ? new Date(t.last_digest_at + ' UTC').toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+                : 'Never';
+              const userLabel = t.user_id ? `#${t.user_id}` : '<span style="color:var(--red-fg);">none</span>';
+              return `<tr style="border-bottom:1px solid var(--gray-100);">
+                <td style="padding:10px 16px;font-weight:500;">${escHtml(t.name)}</td>
+                <td style="padding:10px 16px;color:var(--gray-600);font-size:12px;">${escHtml(t.recipient_emails)}</td>
+                <td style="padding:10px 16px;color:var(--gray-500);">${userLabel}</td>
+                <td style="padding:10px 16px;color:var(--gray-500);font-size:12px;">${lastRun}</td>
+                <td style="padding:10px 16px;">
+                  <form method="POST" action="/admin/tenants/${t.id}/delete" onsubmit="return confirm('Delete ${escHtml(t.name)}? This cannot be undone.')">
+                    <button type="submit" style="background:var(--red-bg);color:var(--red-fg);border:1px solid var(--red-fg);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;">Delete</button>
+                  </form>
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     ${orphaned.length > 0 ? `
     <div style="margin-top:32px;">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
@@ -1426,9 +1466,13 @@ function adminPage(users, flash, orphaned = []) {
 
 // Admin routes
 app.get('/admin', requireAuth, loadUser, requireAdmin, async (req, res) => {
-  const [users, orphaned] = await Promise.all([getAllUsersWithTenants(), getOrphanedTenants()]);
+  const [users, orphaned, allTenants] = await Promise.all([
+    getAllUsersWithTenants(),
+    getOrphanedTenants(),
+    getAllTenants(),
+  ]);
   const flash = req.query.flash ? decodeURIComponent(req.query.flash) : null;
-  res.send(adminPage(users, flash, orphaned));
+  res.send(adminPage(users, flash, orphaned, allTenants));
 });
 
 app.get('/admin/cron-status', requireAuth, loadUser, requireAdmin, async (req, res) => {
