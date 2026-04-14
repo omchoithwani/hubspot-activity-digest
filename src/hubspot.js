@@ -220,7 +220,7 @@ function getReportingRange(ianaTimezone, periodDays = 1, weekStartDay = null) {
 /**
  * Fetch all pages of search results up to a maximum
  */
-async function searchAll(searchFn, params, maxResults = 500) {
+async function searchAll(searchFn, params, maxResults = 5000) {
   const results = [];
   let after = undefined;
 
