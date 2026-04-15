@@ -477,6 +477,27 @@ async function fetchTasksCompleted({ startMs, endMs, startDateUtcMs, endDateUtcM
 }
 
 /**
+ * Fetch call disposition options → { guidValue: label } map.
+ * Used to convert hs_call_disposition GUIDs to readable outcomes in charts.
+ */
+async function fetchCallDispositions() {
+  try {
+    const c = getClient();
+    const data = await withRetry(() =>
+      c.apiRequest({ method: 'GET', path: '/crm/v3/properties/calls/hs_call_disposition' })
+    );
+    const map = {};
+    for (const opt of (data.options || [])) {
+      if (opt.value && opt.label) map[opt.value] = opt.label;
+    }
+    return map;
+  } catch (err) {
+    console.warn('Could not fetch call dispositions:', err.message);
+    return {};
+  }
+}
+
+/**
  * Fetch calls logged in the last 24 hours
  */
 async function fetchCallsLogged({ startMs, endMs }) {
@@ -861,6 +882,7 @@ module.exports = {
   runWithToken,
   runWithTenant,
   refreshTenantToken,
+  fetchCallDispositions,
   fetchOwners,
   fetchDealStages,
   fetchDealsCreated,

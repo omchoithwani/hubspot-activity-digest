@@ -5,6 +5,7 @@ require('dotenv').config();
 const {
   runWithToken,
   runWithTenant,
+  fetchCallDispositions,
   fetchOwners,
   fetchDealStages,
   fetchDealsCreated,
@@ -120,11 +121,12 @@ async function _generateDigest(options = {}) {
 
   const errors = [];
 
-  // Fetch owners and stage map first (needed for rendering)
+  // Fetch owners, stage map, and call dispositions first (needed for rendering)
   console.log('\nFetching metadata...');
-  const [ownerMap, stageMap] = await Promise.all([
+  const [ownerMap, stageMap, dispositionMap] = await Promise.all([
     safelyFetch('Owners', fetchOwners, errors),
     safelyFetch('Deal Stages', fetchDealStages, errors),
+    fetchCallDispositions(),
   ]);
 
   // Fetch activity types one at a time with a 500ms gap between each call.
@@ -203,9 +205,10 @@ async function _generateDigest(options = {}) {
     data,
     ownerMap: Array.isArray(ownerMap) ? {} : ownerMap,
     stageMap: Array.isArray(stageMap) ? {} : stageMap,
+    dispositionMap: typeof dispositionMap === 'object' && !Array.isArray(dispositionMap) ? dispositionMap : {},
     errors,
     previewUrl,
-    showAll: skipEmail, // preview renders all rows; email caps at VIEW_MORE_LIMIT
+    showAll: skipEmail,
   });
 
   const subject = generateSubject(formatDate(now, accountTimezone).split(',')[0], totalActivities);
