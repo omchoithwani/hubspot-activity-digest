@@ -191,14 +191,14 @@ function stageBadge(from, to) {
 }
 
 /**
- * Generate a stacked bar chart (inline SVG) of calls per owner broken down by outcome.
- * Safe for email — no JavaScript required.
+ * Generate a plain HTML table of calls per rep broken down by outcome.
+ * Shows every outcome, works in all email clients.
  */
-function callsByOwnerChart(calls, ownerMap, dispositionMap) {
+function callsByOwnerTable(calls, ownerMap, dispositionMap) {
   if (!calls || calls.length === 0) return '';
 
   // ── Aggregate data ────────────────────────────────────────────────────────
-  const ownerData = {};   // { ownerName: { dispositionLabel: count } }
+  const ownerData = {};  // { ownerName: { dispositionLabel: count } }
   const dispositionSet = new Set();
 
   for (const call of calls) {
@@ -217,110 +217,73 @@ function callsByOwnerChart(calls, ownerMap, dispositionMap) {
     dispositionSet.add(dispLabel);
   }
 
-  // Sort owners by total calls descending, cap at 20 for readability
-  const owners = Object.keys(ownerData)
-    .sort((a, b) =>
-      Object.values(ownerData[b]).reduce((s, n) => s + n, 0) -
-      Object.values(ownerData[a]).reduce((s, n) => s + n, 0)
-    )
-    .slice(0, 20);
+  // Sort owners by total calls descending
+  const owners = Object.keys(ownerData).sort((a, b) =>
+    Object.values(ownerData[b]).reduce((s, n) => s + n, 0) -
+    Object.values(ownerData[a]).reduce((s, n) => s + n, 0)
+  );
 
-  const dispositions = [...dispositionSet].sort();
+  // Sort outcomes: put "No Outcome" last, rest alphabetically
+  const dispositions = [...dispositionSet].sort((a, b) => {
+    if (a === 'No Outcome') return 1;
+    if (b === 'No Outcome') return -1;
+    return a.localeCompare(b);
+  });
 
-  // ── Color palette ─────────────────────────────────────────────────────────
-  const COLOR_MAP = {
-    connected:       '#10B981',
-    'no answer':     '#EF4444',
-    voicemail:       '#F59E0B',
-    'live message':  '#3B82F6',
-    busy:            '#8B5CF6',
-    'wrong number':  '#EC4899',
-    'no outcome':    '#9CA3AF',
-  };
-  const PALETTE = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06B6D4','#F97316','#84CC16'];
-  let paletteIdx = 0;
-  const colorOf = {};
+  const cellStyle = `padding:7px 10px;font-size:12px;font-family:'DM Sans',Arial,sans-serif;border-bottom:1px solid ${BORDER};`;
+  const numStyle  = `${cellStyle}text-align:center;`;
+  const headStyle = `padding:7px 10px;font-size:11px;font-weight:600;font-family:'DM Sans',Arial,sans-serif;background:${LIGHT_GRAY};border-bottom:2px solid ${BORDER};text-align:center;white-space:nowrap;`;
+  const repHeadStyle = `${headStyle}text-align:left;`;
+  const totalHeadStyle = `${headStyle}background:#E5E7EB;`;
+  const totalCellStyle = `${numStyle}font-weight:700;background:#F9FAFB;`;
+
+  // Column totals (for footer row)
+  const colTotals = {};
   for (const d of dispositions) {
-    const key = Object.keys(COLOR_MAP).find(k => d.toLowerCase().includes(k));
-    colorOf[d] = key ? COLOR_MAP[key] : PALETTE[paletteIdx++ % PALETTE.length];
+    colTotals[d] = owners.reduce((s, o) => s + (ownerData[o][d] || 0), 0);
   }
+  const grandTotal = owners.reduce((s, o) =>
+    s + Object.values(ownerData[o]).reduce((t, n) => t + n, 0), 0
+  );
 
-  // ── SVG layout ────────────────────────────────────────────────────────────
-  const W = 560, PAD_L = 38, PAD_R = 10, PAD_T = 12, PAD_B = 48;
-  const CHART_W = W - PAD_L - PAD_R;
-  const CHART_H = 170;
-  const H = PAD_T + CHART_H + PAD_B;
-
-  const maxTotal = Math.max(...owners.map(o =>
-    Object.values(ownerData[o]).reduce((s, n) => s + n, 0)
-  ));
-  const step  = maxTotal <= 10 ? 1 : maxTotal <= 50 ? 5 : maxTotal <= 200 ? 10 : 25;
-  const yMax  = Math.max(1, Math.ceil(maxTotal / step) * step);
-
-  const slotW = CHART_W / owners.length;
-  const barW  = Math.max(6, Math.min(48, slotW * 0.65));
-
-  // Y axis grid lines + labels
-  const GRID_STEPS = Math.min(5, yMax);
-  const gridLines = Array.from({ length: GRID_STEPS + 1 }, (_, i) => {
-    const val = Math.round(yMax * i / GRID_STEPS);
-    const y   = (PAD_T + CHART_H - (val / yMax) * CHART_H).toFixed(1);
-    return `<line x1="${PAD_L}" y1="${y}" x2="${W - PAD_R}" y2="${y}" stroke="#E5E7EB" stroke-width="1"/>` +
-           `<text x="${PAD_L - 4}" y="${(+y + 4).toFixed(1)}" text-anchor="end" font-size="9" fill="#9CA3AF" font-family="Arial,sans-serif">${val}</text>`;
-  }).join('');
-
-  // Bars
-  const bars = owners.map((owner, i) => {
-    const cx    = PAD_L + slotW * i + slotW / 2;
-    const bx    = (cx - barW / 2).toFixed(1);
-    let   accH  = 0;
-    const segs  = dispositions.map(d => {
-      const cnt = ownerData[owner][d] || 0;
-      if (!cnt) return '';
-      const segH = ((cnt / yMax) * CHART_H);
-      const ry   = (PAD_T + CHART_H - accH - segH).toFixed(1);
-      accH += segH;
-      return `<rect x="${bx}" y="${ry}" width="${barW}" height="${segH.toFixed(1)}" fill="${colorOf[d]}" rx="1"/>`;
-    }).join('');
+  const headerCols = dispositions.map(d => `<th style="${headStyle}">${escHtml(d)}</th>`).join('');
+  const dataRows = owners.map((owner, i) => {
+    const rowBg = i % 2 === 1 ? `background:${ROW_ALT};` : '';
     const total = Object.values(ownerData[owner]).reduce((s, n) => s + n, 0);
-    // First name only, max 9 chars
-    const label = owner.split(' ')[0].substring(0, 9);
-    const labelY = (PAD_T + CHART_H + 13).toFixed(1);
-    const totalY = (PAD_T + CHART_H - accH - 3).toFixed(1);
-    return segs +
-      `<text x="${cx.toFixed(1)}" y="${labelY}" text-anchor="middle" font-size="9" fill="#374151" font-family="Arial,sans-serif">${label}</text>` +
-      (accH > 0 ? `<text x="${cx.toFixed(1)}" y="${totalY}" text-anchor="middle" font-size="9" fill="#6B7280" font-family="Arial,sans-serif">${total}</text>` : '');
+    const cols  = dispositions.map(d => {
+      const cnt = ownerData[owner][d] || 0;
+      return `<td style="${numStyle}${rowBg}">${cnt > 0 ? cnt : '<span style="color:#D1D5DB;">—</span>'}</td>`;
+    }).join('');
+    return `<tr>
+      <td style="${cellStyle}${rowBg}font-weight:500;">${escHtml(owner)}</td>
+      ${cols}
+      <td style="${totalCellStyle}${rowBg}">${total}</td>
+    </tr>`;
   }).join('');
 
-  // Legend
-  const LEG_COL_W = 155;
-  const LEG_COLS  = Math.min(3, dispositions.length);
-  const legItems  = dispositions.map((d, i) => {
-    const lx = (i % LEG_COLS) * LEG_COL_W;
-    const ly = Math.floor(i / LEG_COLS) * 16;
-    return `<rect x="${lx}" y="${ly}" width="9" height="9" fill="${colorOf[d]}" rx="2"/>` +
-           `<text x="${lx + 13}" y="${ly + 9}" font-size="10" fill="#374151" font-family="Arial,sans-serif">${d}</text>`;
-  }).join('');
-  const legH = Math.ceil(dispositions.length / LEG_COLS) * 16 + 8;
-  const legW = Math.min(dispositions.length, LEG_COLS) * LEG_COL_W;
+  const footerCols = dispositions.map(d =>
+    `<td style="${totalCellStyle}">${colTotals[d] > 0 ? colTotals[d] : '—'}</td>`
+  ).join('');
 
   return `
-    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 20px;">
-      <tr><td style="padding:0 0 4px 0;">
-        <p style="margin:0;font-size:11px;color:${TEXT_MUTED};font-family:Arial,sans-serif;">Calls by rep &amp; outcome</p>
-      </td></tr>
-      <tr><td>
-        <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="display:block;max-width:100%;">
-          ${gridLines}
-          <line x1="${PAD_L}" y1="${PAD_T + CHART_H}" x2="${W - PAD_R}" y2="${PAD_T + CHART_H}" stroke="#D1D5DB" stroke-width="1"/>
-          ${bars}
-        </svg>
-      </td></tr>
-      <tr><td style="padding-top:6px;">
-        <svg width="${legW}" height="${legH}" viewBox="0 0 ${legW} ${legH}" xmlns="http://www.w3.org/2000/svg" style="display:block;">
-          <g transform="translate(${PAD_L},0)">${legItems}</g>
-        </svg>
-      </td></tr>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:10px 0 20px;border:1px solid ${BORDER};border-radius:6px;overflow:hidden;">
+      <thead>
+        <tr>
+          <th style="${repHeadStyle}">Rep</th>
+          ${headerCols}
+          <th style="${totalHeadStyle}">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${dataRows}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td style="${cellStyle}font-weight:700;background:#F9FAFB;">Total</td>
+          ${footerCols}
+          <td style="${totalCellStyle}">${grandTotal}</td>
+        </tr>
+      </tfoot>
     </table>`;
 }
 
@@ -804,7 +767,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, dispositionMap
                 <!-- Calls Logged -->
                 ${callsLogged.length > 0 ? `
                 ${sectionHeader('Calls Logged', callsLogged.length)}
-                ${(function() { try { return callsByOwnerChart(callsLogged, ownerMap, dispositionMap); } catch (_) { return ''; } })()}
+                ${callsByOwnerTable(callsLogged, ownerMap, dispositionMap)}
                 ${activityTable(
                   ['Title', 'Time', 'Direction', 'Duration', 'Owner'],
                   callsRows,
