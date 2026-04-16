@@ -126,7 +126,7 @@ async function _generateDigest(options = {}) {
   const [ownerMap, stageMap, dispositionMap] = await Promise.all([
     safelyFetch('Owners', fetchOwners, errors),
     safelyFetch('Deal Stages', fetchDealStages, errors),
-    fetchCallDispositions(),
+    fetchCallDispositions().catch((err) => { console.warn('fetchCallDispositions failed:', err.message); return {}; }),
   ]);
 
   // Fetch activity types one at a time with a 500ms gap between each call.

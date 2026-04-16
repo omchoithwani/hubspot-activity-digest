@@ -804,7 +804,7 @@ function generateEmailHtml({ dateRange, data, ownerMap, stageMap, dispositionMap
                 <!-- Calls Logged -->
                 ${callsLogged.length > 0 ? `
                 ${sectionHeader('Calls Logged', callsLogged.length)}
-                ${callsByOwnerChart(callsLogged, ownerMap, dispositionMap)}
+                ${(function() { try { return callsByOwnerChart(callsLogged, ownerMap, dispositionMap); } catch (_) { return ''; } })()}
                 ${activityTable(
                   ['Title', 'Time', 'Direction', 'Duration', 'Owner'],
                   callsRows,

@@ -101,14 +101,13 @@ async function withRetry(fn, retries = 4) {
       if (status === 429 && attempt < retries) {
         // Honour Retry-After header if present (value is in seconds)
         const retryAfter = err?.response?.headers?.['retry-after'];
-        // Detect per-second limit vs per-day limit from error body
-        let policyName = '';
-        try { policyName = (await err?.response?.json?.())?.policyName || ''; } catch (_) {}
-        const isSecondly = policyName === 'SECONDLY' || (!retryAfter && delay < 5000);
+        // Treat as SECONDLY (per-second) if no Retry-After and still in short-delay range.
+        // Avoids consuming the response body (which the SDK may have already read).
+        const isSecondly = !retryAfter && delay < 5000;
         const waitMs = retryAfter
           ? Math.ceil(parseFloat(retryAfter)) * 1000
           : isSecondly ? 2000 : delay;
-        console.warn(`Rate limited (${policyName || 'unknown'}). Retrying in ${waitMs}ms... (attempt ${attempt + 1}/${retries})`);
+        console.warn(`Rate limited. Retrying in ${waitMs}ms... (attempt ${attempt + 1}/${retries})`);
         await sleep(waitMs);
         delay = isSecondly ? Math.min(delay * 1.5, 10000) : Math.max(delay * 2, waitMs * 2);
       } else {
@@ -483,11 +482,13 @@ async function fetchTasksCompleted({ startMs, endMs, startDateUtcMs, endDateUtcM
 async function fetchCallDispositions() {
   try {
     const c = getClient();
-    const data = await withRetry(() =>
+    const raw = await withRetry(() =>
       c.apiRequest({ method: 'GET', path: '/crm/v3/properties/calls/hs_call_disposition' })
     );
+    // apiRequest may return a pre-parsed object or a fetch Response depending on SDK version
+    const data = (raw && typeof raw.json === 'function') ? await raw.json() : raw;
     const map = {};
-    for (const opt of (data.options || [])) {
+    for (const opt of (data?.options || [])) {
       if (opt.value && opt.label) map[opt.value] = opt.label;
     }
     return map;
