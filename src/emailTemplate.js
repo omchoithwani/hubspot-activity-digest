@@ -14,6 +14,14 @@ const SUCCESS    = '#15803D';
 const WARNING    = '#B45309';
 const DANGER     = '#DC2626';
 
+function escHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 // When a single object type has >= this many records created in the window,
 // we assume it was a bulk import or integration sync and show a summary
 // instead of a (potentially thousands-of-rows) table.
