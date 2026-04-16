@@ -491,9 +491,17 @@ async function fetchCallDispositions() {
     for (const opt of (data?.options || [])) {
       if (opt.value && opt.label) map[opt.value] = opt.label;
     }
+    const count = Object.keys(map).length;
+    if (count === 0) {
+      console.warn('[dispositions] No options returned — response:', JSON.stringify(data)?.slice(0, 300));
+    } else {
+      console.log(`[dispositions] Loaded ${count} call disposition labels`);
+    }
     return map;
   } catch (err) {
-    console.warn('Could not fetch call dispositions:', err.message);
+    const status = err?.response?.status || err?.statusCode || '';
+    console.warn(`[dispositions] Failed to fetch call dispositions (${status}): ${err.message}`);
+    console.warn('[dispositions] Token may be missing crm.schemas.calls.read scope — reconnect HubSpot to fix');
     return {};
   }
 }
