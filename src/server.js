@@ -1057,7 +1057,6 @@ app.get('/oauth/hubspot', requireAuth, (req, res) => {
     'crm.schemas.deals.read',
     'sales-email-read',
     'forms',
-    'oauth',
   ].join(' ');
 
   const state = Buffer.from(JSON.stringify({ userId: req.user.id })).toString('base64url');
