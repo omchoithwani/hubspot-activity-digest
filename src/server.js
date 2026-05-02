@@ -1055,7 +1055,6 @@ app.get('/oauth/hubspot', requireAuth, (req, res) => {
     'crm.objects.deals.read',
     'crm.objects.owners.read',
     'crm.schemas.deals.read',
-    'crm.schemas.calls.read',
     'sales-email-read',
     'forms',
     'oauth',

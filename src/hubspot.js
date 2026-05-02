@@ -475,9 +475,22 @@ async function fetchTasksCompleted({ startMs, endMs, startDateUtcMs, endDateUtcM
   }
 }
 
+// HubSpot's default call disposition GUIDs are consistent across all portals.
+// Used as a fallback when the properties API is inaccessible (missing scope).
+// Custom dispositions added by portal admins will still show as 'Other'.
+const DEFAULT_DISPOSITION_MAP = {
+  'f240bbac-87c9-4f6e-bf70-924b57d47db7': 'Connected',
+  '73a0d17f-1163-4015-bdd5-ec830791da20': 'Left live message',
+  '17b47fee-58de-441e-a44c-463173ac8a2e': 'Left voicemail',
+  '9d9162e7-6cf3-4944-bf63-4dbe82081db7': 'No answer',
+  'a4c4c377-d246-4b32-a13b-75a56a4cd0ff': 'Busy',
+  'b2cf5968-551e-4856-9783-52b3da59a7d5': 'Wrong number',
+};
+
 /**
  * Fetch call disposition options → { guidValue: label } map.
- * Used to convert hs_call_disposition GUIDs to readable outcomes in charts.
+ * Tries the HubSpot properties API first; falls back to the built-in
+ * default GUID map if the API call fails (e.g. missing crm.schemas.calls.read scope).
  */
 async function fetchCallDispositions() {
   try {
@@ -491,19 +504,16 @@ async function fetchCallDispositions() {
     for (const opt of (data?.options || [])) {
       if (opt.value && opt.label) map[opt.value] = opt.label;
     }
-    const count = Object.keys(map).length;
-    if (count === 0) {
-      console.warn('[dispositions] No options returned — response:', JSON.stringify(data)?.slice(0, 300));
-    } else {
-      console.log(`[dispositions] Loaded ${count} call disposition labels`);
+    if (Object.keys(map).length > 0) {
+      console.log(`[dispositions] Loaded ${Object.keys(map).length} call disposition labels from API`);
+      return map;
     }
-    return map;
+    console.warn('[dispositions] API returned no options — using built-in defaults');
   } catch (err) {
     const status = err?.response?.status || err?.statusCode || '';
-    console.warn(`[dispositions] Failed to fetch call dispositions (${status}): ${err.message}`);
-    console.warn('[dispositions] Token may be missing crm.schemas.calls.read scope — reconnect HubSpot to fix');
-    return {};
+    console.warn(`[dispositions] API call failed (${status}): ${err.message} — using built-in defaults`);
   }
+  return { ...DEFAULT_DISPOSITION_MAP };
 }
 
 /**
